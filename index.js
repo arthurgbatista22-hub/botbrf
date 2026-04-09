@@ -520,8 +520,14 @@ client.on('interactionCreate', async (interaction) => {
           await member.roles.add(contractData.teamRoleId);
           console.log(`✅ Cargo ${contractData.teamName} adicionado a ${member.user.tag}`);
         }
+        // Remover cargo de Free Agent ao assinar contrato
+        const FA_ROLE_ID = '1390799685849186380';
+        if (member && member.roles.cache.has(FA_ROLE_ID)) {
+          await member.roles.remove(FA_ROLE_ID);
+          console.log(`🗑️ Cargo FA removido de ${member.user.tag}`);
+        }
       } catch (err) {
-        console.error('❌ Erro ao adicionar cargo:', err);
+        console.error('❌ Erro ao adicionar/remover cargo:', err);
       }
 
       const successEmbed = new EmbedBuilder()
