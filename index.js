@@ -44,19 +44,22 @@ const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 // 📍 CANAIS PERMITIDOS PARA COMANDOS
 // ═══════════════════════════════════════════════════════
 
-const ALLOWED_CONTRACT_CHANNELS = [
-  '1390799688432881730',
+// Canal onde o jogador usa /fa
+const ALLOWED_FA_CHANNELS = [
+  '1429589879297409135',
 ];
 
-const ALLOWED_FA_CHANNELS = [
-  '1482051154350178466',
+// Canal onde o embed de FA é enviado automaticamente
+const FA_ANNOUNCEMENT_CHANNEL = '1491550047228399778';
+
+const ALLOWED_CONTRACT_CHANNELS = [
+  '1390799688432881730',
 ];
 
 const ALLOWED_SCOUTING_CHANNELS = [
   '1482051086243205292',
 ];
 
-// Canais permitidos para usar /release
 const ALLOWED_RELEASE_CHANNELS = [
   '1491600185615192205',
 ];
@@ -101,7 +104,6 @@ function loadContracts() {
     for (const [id, c] of Object.entries(data)) {
       const expiresAt = new Date(c.expiresAt).getTime();
       if (expiresAt > now) {
-        // Recriar objeto com signee/contractor como objeto simples
         activeContracts.set(id, {
           ...c,
           signee: c.signee,
@@ -110,7 +112,6 @@ function loadContracts() {
           signedAt: new Date(c.signedAt),
           expiresAt: new Date(c.expiresAt),
         });
-        // Reagendar expiração pelo tempo restante
         const remaining = expiresAt - now;
         const timer = setTimeout(async () => {
           activeContracts.delete(id);
@@ -220,7 +221,7 @@ async function scheduleContractExpiration(contractId, contractData) {
               .setTitle('⏰ Contrato Expirado')
               .setDescription(`O contrato de **${contract.signee.username}** com **${contract.teamName}** expirou após 24 horas.`)
               .addFields(
-                { name: 'Jogador', value: `${contract.signee}`, inline: true },
+                { name: 'Jogador', value: `<@${contract.signee.id}>`, inline: true },
                 { name: 'Time', value: contract.teamName, inline: true },
                 { name: 'Posição', value: contract.position, inline: true },
                 { name: 'Assinado em', value: formatDate(contract.signedAt), inline: false },
@@ -229,7 +230,7 @@ async function scheduleContractExpiration(contractId, contractData) {
               .setFooter({ text: 'Brazilian Roblox Federation' })
               .setTimestamp();
             await channel.send({
-              content: `⚠️ ${contract.contractor} ${contract.signee}`,
+              content: `⚠️ <@${contract.contractor.id}> <@${contract.signee.id}>`,
               embeds: [expirationEmbed]
             });
           }
@@ -283,7 +284,6 @@ const commands = [
 client.once('ready', async () => {
   console.log(`✅ Bot online como: ${client.user.tag}`);
 
-  // Carregar contratos salvos do disco
   loadContracts();
 
   client.user.setPresence({
@@ -432,7 +432,6 @@ client.on('interactionCreate', async (interaction) => {
 
         await signee.send({ embeds: [dmEmbed] });
       } catch (err) {
-        // Usuário pode ter DMs fechadas, ignora silenciosamente
         console.log(`⚠️ Não foi possível enviar DM para ${signee.username}: DMs fechadas.`);
       }
     }
@@ -538,7 +537,21 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [faEmbed] });
+      // Responder ao usuário no canal onde usou o comando (ephemeral)
+      await interaction.reply({
+        content: '✅ Seu anúncio de Free Agent foi publicado!',
+        ephemeral: true
+      });
+
+      // Enviar o embed no canal de anúncios de FA
+      try {
+        const announcementChannel = await interaction.guild.channels.fetch(FA_ANNOUNCEMENT_CHANNEL);
+        if (announcementChannel) {
+          await announcementChannel.send({ embeds: [faEmbed] });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao enviar FA no canal de anúncios:', err);
+      }
     }
 
     // /scouting
@@ -600,7 +613,6 @@ client.on('interactionCreate', async (interaction) => {
       const member = interaction.member;
       const FA_ROLE_ID = '1390799685849186380';
 
-      // Verificar se o membro tem algum cargo de time
       const teamRoleId = ALLOWED_TEAM_ROLES.find(id => member.roles.cache.has(id));
 
       if (!teamRoleId) {
@@ -617,13 +629,9 @@ client.on('interactionCreate', async (interaction) => {
       const teamName = teamRole ? teamRole.name : 'Time desconhecido';
 
       try {
-        // Remover cargo do time
         await member.roles.remove(teamRoleId);
-
-        // Adicionar cargo de Free Agent
         await member.roles.add(FA_ROLE_ID);
 
-        // Remover contrato ativo se existir
         for (const [id, c] of activeContracts) {
           if (c.signee.id === interaction.user.id) {
             activeContracts.delete(id);
@@ -699,7 +707,6 @@ client.on('interactionCreate', async (interaction) => {
           await member.roles.add(contractData.teamRoleId);
           console.log(`✅ Cargo ${contractData.teamName} adicionado a ${member.user.tag}`);
         }
-        // Remover cargo de Free Agent ao assinar contrato
         const FA_ROLE_ID = '1390799685849186380';
         if (member && member.roles.cache.has(FA_ROLE_ID)) {
           await member.roles.remove(FA_ROLE_ID);
