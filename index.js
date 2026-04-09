@@ -1,3 +1,4 @@
+const fs = require('fs');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
 require('dotenv').config();
 
@@ -66,6 +67,97 @@ const pendingContracts = new Map();
 const activeContracts = new Map();
 const expirationTimers = new Map();
 
+// ═══════════════════════════════════════════════════════
+// 💾 PERSISTÊNCIA DE CONTRATOS (salvo em contratos.json)
+// ═══════════════════════════════════════════════════════
+
+const CONTRACTS_FILE = './contratos.json';
+
+function saveContracts() {
+  const data = {};
+  for (const [id, c] of activeContracts) {
+    data[id] = {
+      contractId: c.contractId,
+      signee: { id: c.signee.id, username: c.signee.username },
+      contractor: { id: c.contractor.id, username: c.contractor.username },
+      teamName: c.teamName,
+      teamRoleId: c.teamRoleId,
+      position: c.position,
+      proposedAt: c.proposedAt,
+      signedAt: c.signedAt,
+      expiresAt: c.expiresAt,
+      channelId: c.channelId,
+      guildId: c.guildId,
+    };
+  }
+  fs.writeFileSync(CONTRACTS_FILE, JSON.stringify(data, null, 2));
+}
+
+function loadContracts() {
+  if (!fs.existsSync(CONTRACTS_FILE)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(CONTRACTS_FILE, 'utf8'));
+    const now = Date.now();
+    for (const [id, c] of Object.entries(data)) {
+      const expiresAt = new Date(c.expiresAt).getTime();
+      if (expiresAt > now) {
+        // Recriar objeto com signee/contractor como objeto simples
+        activeContracts.set(id, {
+          ...c,
+          signee: c.signee,
+          contractor: c.contractor,
+          proposedAt: new Date(c.proposedAt),
+          signedAt: new Date(c.signedAt),
+          expiresAt: new Date(c.expiresAt),
+        });
+        // Reagendar expiração pelo tempo restante
+        const remaining = expiresAt - now;
+        const timer = setTimeout(async () => {
+          activeContracts.delete(id);
+          expirationTimers.delete(id);
+          saveContracts();
+          try {
+            const guild = client.guilds.cache.get(c.guildId);
+            if (guild) {
+              const channel = guild.channels.cache.get(c.channelId);
+              const member = await guild.members.fetch(c.signee.id).catch(() => null);
+              if (member && c.teamRoleId) {
+                await member.roles.remove(c.teamRoleId).catch(() => {});
+              }
+              if (member) {
+                await member.roles.add('1390799685849186380').catch(() => {});
+              }
+              if (channel) {
+                const expirationEmbed = new EmbedBuilder()
+                  .setColor(0xffa500)
+                  .setTitle('⏰ Contrato Expirado')
+                  .setDescription(`O contrato de **${c.signee.username}** com **${c.teamName}** expirou após 24 horas.`)
+                  .addFields(
+                    { name: 'Jogador', value: `<@${c.signee.id}>`, inline: true },
+                    { name: 'Time', value: c.teamName, inline: true },
+                    { name: 'Posição', value: c.position, inline: true },
+                  )
+                  .setFooter({ text: 'Brazilian Roblox Federation' })
+                  .setTimestamp();
+                await channel.send({ embeds: [expirationEmbed] });
+              }
+            }
+          } catch (err) {
+            console.error('Erro na expiração:', err);
+          }
+        }, remaining);
+        expirationTimers.set(id, timer);
+        console.log(`📂 Contrato carregado: ${c.signee.username} — ${c.teamName}`);
+      } else {
+        console.log(`⏰ Contrato expirado ignorado: ${c.signee.username}`);
+      }
+    }
+    console.log(`✅ ${activeContracts.size} contrato(s) carregado(s) do disco.`);
+  } catch (err) {
+    console.error('Erro ao carregar contratos:', err);
+  }
+}
+
 function generateContractId(signeeId, contractorId) {
   const timestamp = Date.now();
   const random = Math.floor(Math.random() * 10000000000);
@@ -111,6 +203,7 @@ async function scheduleContractExpiration(contractId, contractData) {
     if (contract) {
       activeContracts.delete(contractId);
       expirationTimers.delete(contractId);
+      saveContracts();
       try {
         const guild = client.guilds.cache.get(contract.guildId);
         if (guild) {
@@ -189,6 +282,9 @@ const commands = [
 
 client.once('ready', async () => {
   console.log(`✅ Bot online como: ${client.user.tag}`);
+
+  // Carregar contratos salvos do disco
+  loadContracts();
 
   client.user.setPresence({
     activities: [{ name: 'Brazilian Roblox Federation', type: 0 }],
@@ -536,6 +632,7 @@ client.on('interactionCreate', async (interaction) => {
               clearTimeout(timer);
               expirationTimers.delete(id);
             }
+            saveContracts();
             break;
           }
         }
@@ -591,6 +688,7 @@ client.on('interactionCreate', async (interaction) => {
 
       activeContracts.set(contractId, signedContract);
       pendingContracts.delete(contractId);
+      saveContracts();
 
       scheduleContractExpiration(contractId, signedContract);
 
