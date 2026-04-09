@@ -48,17 +48,22 @@ const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 const ALLOWED_FA_CHANNELS = [
   '1429589879297409135',
 ];
-
 // Canal onde o embed de FA é enviado automaticamente
 const FA_ANNOUNCEMENT_CHANNEL = '1491550047228399778';
 
+// Canal onde o jogador usa /contract
 const ALLOWED_CONTRACT_CHANNELS = [
-  '1390799688432881730',
+  '1429589879297409135',
 ];
+// Canal onde o embed de contract é enviado automaticamente
+const CONTRACT_ANNOUNCEMENT_CHANNEL = '1390799688432881730';
 
+// Canal onde o jogador usa /scouting
 const ALLOWED_SCOUTING_CHANNELS = [
-  '1482051086243205292',
+  '1429589879297409135',
 ];
+// Canal onde o embed de scouting é enviado automaticamente
+const SCOUTING_ANNOUNCEMENT_CHANNEL = '1482051086243205292';
 
 const ALLOWED_RELEASE_CHANNELS = [
   '1491600185615192205',
@@ -410,10 +415,23 @@ client.on('interactionCreate', async (interaction) => {
           .setStyle(ButtonStyle.Danger)
       );
 
+      // Enviar o embed no canal de anúncios de contracts
+      try {
+        const announcementChannel = await interaction.guild.channels.fetch(CONTRACT_ANNOUNCEMENT_CHANNEL);
+        if (announcementChannel) {
+          await announcementChannel.send({
+            content: `🔔 ${signee}, um contrato foi proposto por ${contractor}.`,
+            embeds: [embed],
+            components: [row],
+          });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao enviar contract no canal de anúncios:', err);
+      }
+
       await interaction.reply({
-        content: `🔔 ${signee}, um contrato foi proposto por ${contractor}.`,
-        embeds: [embed],
-        components: [row],
+        content: '✅ Contrato enviado para o canal de contratos!',
+        ephemeral: true
       });
 
       // ── NOTIFICAÇÃO POR DM ──
@@ -595,7 +613,21 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [scoutingEmbed] });
+      // Responder ao usuário de forma ephemeral
+      await interaction.reply({
+        content: '✅ Seu anúncio de scouting foi publicado!',
+        ephemeral: true
+      });
+
+      // Enviar o embed no canal de anúncios de scouting
+      try {
+        const announcementChannel = await interaction.guild.channels.fetch(SCOUTING_ANNOUNCEMENT_CHANNEL);
+        if (announcementChannel) {
+          await announcementChannel.send({ embeds: [scoutingEmbed] });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao enviar scouting no canal de anúncios:', err);
+      }
     }
 
     // /release
