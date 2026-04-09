@@ -55,6 +55,11 @@ const ALLOWED_SCOUTING_CHANNELS = [
   '1482051086243205292',
 ];
 
+// Canais permitidos para usar /release
+const ALLOWED_RELEASE_CHANNELS = [
+  '1491600185615192205',
+];
+
 // ═══════════════════════════════════════════════════════
 
 const pendingContracts = new Map();
@@ -176,6 +181,10 @@ const commands = [
     .addStringOption(opt => opt.setName('time').setDescription('Nome do time que deseja recrutar').setRequired(true))
     .addStringOption(opt => opt.setName('posicao').setDescription('Posição do jogador procurado').setRequired(true))
     .addStringOption(opt => opt.setName('sobre').setDescription('Descrição do scout (requisitos, etc)').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('release')
+    .setDescription('Se liberar de um time e voltar a ser Free Agent'),
 ];
 
 client.once('ready', async () => {
@@ -478,6 +487,78 @@ client.on('interactionCreate', async (interaction) => {
         .setTimestamp();
 
       await interaction.reply({ embeds: [scoutingEmbed] });
+    }
+
+    // /release
+    else if (interaction.commandName === 'release') {
+      if (!ALLOWED_RELEASE_CHANNELS.includes(interaction.channelId)) {
+        const channelErrorEmbed = new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('❌ Canal Não Permitido')
+          .setDescription('Este comando só pode ser utilizado em canais específicos.')
+          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setTimestamp();
+        return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
+      }
+
+      const member = interaction.member;
+      const FA_ROLE_ID = '1390799685849186380';
+
+      // Verificar se o membro tem algum cargo de time
+      const teamRoleId = ALLOWED_TEAM_ROLES.find(id => member.roles.cache.has(id));
+
+      if (!teamRoleId) {
+        const noTeamEmbed = new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('❌ Sem Time')
+          .setDescription('Você não possui nenhum cargo de time para se liberar.')
+          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setTimestamp();
+        return interaction.reply({ embeds: [noTeamEmbed], ephemeral: true });
+      }
+
+      const teamRole = interaction.guild.roles.cache.get(teamRoleId);
+      const teamName = teamRole ? teamRole.name : 'Time desconhecido';
+
+      try {
+        // Remover cargo do time
+        await member.roles.remove(teamRoleId);
+
+        // Adicionar cargo de Free Agent
+        await member.roles.add(FA_ROLE_ID);
+
+        // Remover contrato ativo se existir
+        for (const [id, c] of activeContracts) {
+          if (c.signee.id === interaction.user.id) {
+            activeContracts.delete(id);
+            const timer = expirationTimers.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              expirationTimers.delete(id);
+            }
+            break;
+          }
+        }
+
+        const releaseEmbed = new EmbedBuilder()
+          .setColor(0xf0c030)
+          .setTitle('🔓 Liberação Confirmada')
+          .setDescription(`${interaction.user} agora está como **Free Agent**!`)
+          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+          .addFields(
+            { name: 'Jogador', value: `${interaction.user}`, inline: true },
+            { name: 'Time Anterior', value: teamName, inline: true },
+            { name: 'Status', value: '🟡 Free Agent', inline: true },
+          )
+          .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [releaseEmbed] });
+
+      } catch (err) {
+        console.error('❌ Erro ao liberar jogador:', err);
+        await interaction.reply({ content: '❌ Ocorreu um erro ao processar sua liberação. Verifique se o bot tem permissão para gerenciar cargos.', ephemeral: true });
+      }
     }
   }
 
