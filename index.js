@@ -703,9 +703,7 @@ client.on('interactionCreate', async (interaction) => {
         const noPermEmbed = new EmbedBuilder()
           .setColor(0xed4245)
           .setTitle('🔒 Sem Permissão')
-          .setDescription('Você não tem permissão para usar este comando.
-
-Apenas membros autorizados podem anunciar friendlies.')
+          .setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem anunciar friendlies.')
           .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
