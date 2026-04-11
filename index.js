@@ -48,30 +48,31 @@ const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 // 📍 CANAIS PERMITIDOS PARA COMANDOS
 // ═══════════════════════════════════════════════════════
 
-// Canal onde o jogador usa /fa
 const ALLOWED_FA_CHANNELS = [
   '1491433748774912140',
 ];
-// Canal onde o embed de FA é enviado automaticamente
 const FA_ANNOUNCEMENT_CHANNEL = '1491439241090170971';
 
-// Canal onde o jogador usa /contract
 const ALLOWED_CONTRACT_CHANNELS = [
   '1491433748774912140',
 ];
-// Canal onde o embed de contract é enviado automaticamente
 const CONTRACT_ANNOUNCEMENT_CHANNEL = '1491447652422914220';
 
-// Canal onde o jogador usa /scouting
 const ALLOWED_SCOUTING_CHANNELS = [
   '1491433748774912140',
 ];
-// Canal onde o embed de scouting é enviado automaticamente
 const SCOUTING_ANNOUNCEMENT_CHANNEL = '1491447682764636332';
 
 const ALLOWED_RELEASE_CHANNELS = [
   '1492354496259428392',
 ];
+
+// ═══════════════════════════════════════════════════════
+// 🚫 ANTI-INVITE
+// ═══════════════════════════════════════════════════════
+
+// Regex que detecta links de convite do Discord
+const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)\/[a-zA-Z0-9]+/i;
 
 // ═══════════════════════════════════════════════════════
 
@@ -312,6 +313,42 @@ client.once('ready', async () => {
   }
 });
 
+// ═══════════════════════════════════════════════════════
+// 🚫 ANTI-INVITE — Detecta e apaga links de convite
+// ═══════════════════════════════════════════════════════
+
+client.on('messageCreate', async (message) => {
+  // Ignorar bots e mensagens sem conteúdo
+  if (message.author.bot) return;
+  if (!message.guild) return;
+
+  // Ignorar admins e quem tem permissão de gerenciar mensagens
+  if (message.member && message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
+
+  if (INVITE_REGEX.test(message.content)) {
+    try {
+      // Apagar a mensagem com o convite
+      await message.delete();
+
+      // Enviar aviso
+      const warning = await message.channel.send({
+        content: `🚫 ${message.author}, **convites de outros servidores não são permitidos aqui!**`,
+      });
+
+      // Apagar o aviso após 5 segundos
+      setTimeout(() => {
+        warning.delete().catch(() => {});
+      }, 5000);
+
+      console.log(`🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`);
+    } catch (err) {
+      console.error('Erro ao deletar convite:', err);
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand()) {
 
@@ -419,7 +456,6 @@ client.on('interactionCreate', async (interaction) => {
           .setStyle(ButtonStyle.Danger)
       );
 
-      // Enviar o embed no canal de anúncios de contracts
       try {
         const announcementChannel = await interaction.guild.channels.fetch(CONTRACT_ANNOUNCEMENT_CHANNEL);
         if (announcementChannel) {
@@ -559,13 +595,11 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      // Responder ao usuário no canal onde usou o comando (ephemeral)
       await interaction.reply({
         content: '✅ Seu anúncio de Free Agent foi publicado!',
         ephemeral: true
       });
 
-      // Enviar o embed no canal de anúncios de FA
       try {
         const announcementChannel = await interaction.guild.channels.fetch(FA_ANNOUNCEMENT_CHANNEL);
         if (announcementChannel) {
@@ -617,13 +651,11 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      // Responder ao usuário de forma ephemeral
       await interaction.reply({
         content: '✅ Seu anúncio de scouting foi publicado!',
         ephemeral: true
       });
 
-      // Enviar o embed no canal de anúncios de scouting
       try {
         const announcementChannel = await interaction.guild.channels.fetch(SCOUTING_ANNOUNCEMENT_CHANNEL);
         if (announcementChannel) {
