@@ -15,25 +15,29 @@ const client = new Client({
 // ⚙️ CONFIGURAÇÃO DE PERMISSÕES E CARGOS
 // ═══════════════════════════════════════════════════════
 
-const ALLOWED_COMMAND_ROLE = '1481792612557131858';
+const ALLOWED_COMMAND_ROLE = '1491439508309278831';
 
 const ALLOWED_TEAM_ROLES = [
-  '1489703332703375541',
-  '1489703459539386618',
-  '1489703653328556203',
-  '1489703788754501733',
-  '1489703877224698067',
-  '1489703990110191666',
-  '1489704078723252404',
-  '1489704178912596179',
-  '1489704324262006946',
-  '1489704418310881411',
-  '1489705366148223179',
-  '1489705446762741894',
-  '1489705555198083283',
-  '1489705994710946003',
-  '1489706704370274495',
-  '1489706859370778725'
+  '1491626081680232488',
+  '1491626182276284466',
+  '1491626270557999127',
+  '1491626367614451823',
+  '1491626509629128834',
+  '1491626604672192633',
+  '1491626684061843536',
+  '1491627187265343498',
+  '1491627290629636186',
+  '1491627452903198720',
+  '1491931433457946754',
+  '1491934575914389586',
+  '1491934655262494870',
+  '1491934695049531505',
+  '1491934860585996521',
+  '1491934946187542589',
+  '1491935127234805958',
+  '1491935298840559807',
+  '1491935469372702810',
+  '1491935723673092237'
 ];
 
 const ALLOWED_TEAM_ROLE_NAMES = [];
@@ -46,27 +50,27 @@ const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 
 // Canal onde o jogador usa /fa
 const ALLOWED_FA_CHANNELS = [
-  '1429589879297409135',
+  '1491433748774912140',
 ];
 // Canal onde o embed de FA é enviado automaticamente
-const FA_ANNOUNCEMENT_CHANNEL = '1491550047228399778';
+const FA_ANNOUNCEMENT_CHANNEL = '1491439241090170971';
 
 // Canal onde o jogador usa /contract
 const ALLOWED_CONTRACT_CHANNELS = [
-  '1429589879297409135',
+  '1491433748774912140',
 ];
 // Canal onde o embed de contract é enviado automaticamente
-const CONTRACT_ANNOUNCEMENT_CHANNEL = '1390799688432881730';
+const CONTRACT_ANNOUNCEMENT_CHANNEL = '1491447652422914220';
 
 // Canal onde o jogador usa /scouting
 const ALLOWED_SCOUTING_CHANNELS = [
-  '1429589879297409135',
+  '1491433748774912140',
 ];
 // Canal onde o embed de scouting é enviado automaticamente
-const SCOUTING_ANNOUNCEMENT_CHANNEL = '1482051086243205292';
+const SCOUTING_ANNOUNCEMENT_CHANNEL = '1491447682764636332';
 
 const ALLOWED_RELEASE_CHANNELS = [
-  '1491600185615192205',
+  '1492354496259428392',
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -131,7 +135,7 @@ function loadContracts() {
                 await member.roles.remove(c.teamRoleId).catch(() => {});
               }
               if (member) {
-                await member.roles.add('1390799685849186380').catch(() => {});
+                await member.roles.add('1492562238761074870').catch(() => {});
               }
               if (channel) {
                 const expirationEmbed = new EmbedBuilder()
@@ -143,7 +147,7 @@ function loadContracts() {
                     { name: 'Time', value: c.teamName, inline: true },
                     { name: 'Posição', value: c.position, inline: true },
                   )
-                  .setFooter({ text: 'Brazilian Roblox Federation' })
+                  .setFooter({ text: 'The Classic Soccer Federation' })
                   .setTimestamp();
                 await channel.send({ embeds: [expirationEmbed] });
               }
@@ -232,7 +236,7 @@ async function scheduleContractExpiration(contractId, contractData) {
                 { name: 'Assinado em', value: formatDate(contract.signedAt), inline: false },
                 { name: 'Expirado em', value: formatDate(new Date()), inline: false }
               )
-              .setFooter({ text: 'Brazilian Roblox Federation' })
+              .setFooter({ text: 'The Classic Soccer Federation' })
               .setTimestamp();
             await channel.send({
               content: `⚠️ <@${contract.contractor.id}> <@${contract.signee.id}>`,
@@ -292,7 +296,7 @@ client.once('ready', async () => {
   loadContracts();
 
   client.user.setPresence({
-    activities: [{ name: 'Brazilian Roblox Federation', type: 0 }],
+    activities: [{ name: 'The Classic Soccer Federation', type: 0 }],
     status: 'online'
   });
 
@@ -318,7 +322,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Canal Não Permitido')
           .setDescription('Este comando só pode ser utilizado em canais específicos.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
@@ -328,7 +332,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('🔒 Sem Permissão')
           .setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem criar contratos.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
       }
@@ -344,7 +348,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Contrato Já Existente')
           .setDescription(`${signee} já possui um contrato ativo com **${existingContract.teamName}**.`)
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
       }
@@ -354,7 +358,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Cargo Não Permitido')
           .setDescription(`O cargo **${teamRole.name}** não está autorizado para contratos.\n\nApenas cargos de times podem ser usados.`)
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
       }
@@ -368,7 +372,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('🔒 Cargo Administrativo Bloqueado')
           .setDescription(`Por segurança, cargos com permissões administrativas não podem ser usados em contratos.`)
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
       }
@@ -401,7 +405,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: 'Team', value: teamRole.name, inline: true },
           { name: 'Position', value: position, inline: true },
         )
-        .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
@@ -439,13 +443,13 @@ client.on('interactionCreate', async (interaction) => {
         const dmEmbed = new EmbedBuilder()
           .setColor(0x5865f2)
           .setTitle('📋 Você recebeu um Contract!')
-          .setDescription(`Você recebeu uma proposta de contrato do time **${teamRole.name}** na liga **Brazilian Roblox Federation**.\n\nAcesse o servidor para aceitar ou rejeitar.`)
+          .setDescription(`Você recebeu uma proposta de contrato do time **${teamRole.name}** na liga **The Classic Soccer Federation**.\n\nAcesse o servidor para aceitar ou rejeitar.`)
           .addFields(
             { name: 'Time', value: teamRole.name, inline: true },
             { name: 'Posição', value: position, inline: true },
             { name: 'Enviado por', value: contractor.username, inline: true },
           )
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
 
         await signee.send({ embeds: [dmEmbed] });
@@ -461,7 +465,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('🔒 Sem Permissão')
           .setDescription('Você não tem permissão para usar este comando.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
       }
@@ -472,7 +476,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const embed = new EmbedBuilder()
         .setColor(0x57f287)
-        .setTitle('📂 Contratos Ativos — Brazilian Roblox Federation')
+        .setTitle('📂 Contratos Ativos — The Classic Soccer Federation')
         .setFooter({ text: `Total: ${activeContracts.size} contrato(s)` })
         .setTimestamp();
 
@@ -494,7 +498,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('🔒 Sem Permissão')
           .setDescription('Você não tem permissão para usar este comando.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
       }
@@ -513,7 +517,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: 'Contratante', value: `${userContract.contractor}`, inline: true },
           { name: 'Assinado em', value: formatDate(userContract.signedAt), inline: false },
         )
-        .setFooter({ text: 'Brazilian Roblox Federation' })
+        .setFooter({ text: 'The Classic Soccer Federation' })
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -526,7 +530,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Canal Não Permitido')
           .setDescription('Este comando só pode ser utilizado em canais específicos.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
@@ -552,7 +556,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       faEmbed
-        .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
       // Responder ao usuário no canal onde usou o comando (ephemeral)
@@ -579,7 +583,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Canal Não Permitido')
           .setDescription('Este comando só pode ser utilizado em canais específicos.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
@@ -589,7 +593,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('🔒 Sem Permissão')
           .setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem fazer scouting.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
       }
@@ -610,7 +614,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: '📝 Detalhes', value: sobre, inline: false },
           { name: 'Scout', value: `${scout}`, inline: true },
         )
-        .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
       // Responder ao usuário de forma ephemeral
@@ -637,13 +641,13 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Canal Não Permitido')
           .setDescription('Este comando só pode ser utilizado em canais específicos.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
 
       const member = interaction.member;
-      const FA_ROLE_ID = '1390799685849186380';
+      const FA_ROLE_ID = '1492562238761074870';
 
       const teamRoleId = ALLOWED_TEAM_ROLES.find(id => member.roles.cache.has(id));
 
@@ -652,7 +656,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0xed4245)
           .setTitle('❌ Sem Time')
           .setDescription('Você não possui nenhum cargo de time para se liberar.')
-          .setFooter({ text: 'Brazilian Roblox Federation' })
+          .setFooter({ text: 'The Classic Soccer Federation' })
           .setTimestamp();
         return interaction.reply({ embeds: [noTeamEmbed], ephemeral: true });
       }
@@ -687,7 +691,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: 'Time Anterior', value: teamName, inline: true },
             { name: 'Status', value: '🟡 Free Agent', inline: true },
           )
-          .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
           .setTimestamp();
 
         await interaction.reply({ embeds: [releaseEmbed] });
@@ -739,7 +743,7 @@ client.on('interactionCreate', async (interaction) => {
           await member.roles.add(contractData.teamRoleId);
           console.log(`✅ Cargo ${contractData.teamName} adicionado a ${member.user.tag}`);
         }
-        const FA_ROLE_ID = '1390799685849186380';
+        const FA_ROLE_ID = '1492562238761074870';
         if (member && member.roles.cache.has(FA_ROLE_ID)) {
           await member.roles.remove(FA_ROLE_ID);
           console.log(`🗑️ Cargo FA removido de ${member.user.tag}`);
@@ -759,7 +763,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: 'Position', value: contractData.position, inline: true },
           { name: 'Signed on', value: formatDate(now), inline: false },
         )
-        .setFooter({ text: `Brazilian Roblox Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
       const disabledRow = new ActionRowBuilder().addComponents(
@@ -776,7 +780,7 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(0xed4245)
         .setTitle('❌ Contract Rejected')
         .setDescription(`${contractData.signee} rejected the contract proposed by ${contractData.contractor} for team **${contractData.teamName}**.`)
-        .setFooter({ text: 'Brazilian Roblox Federation' })
+        .setFooter({ text: 'The Classic Soccer Federation' })
         .setTimestamp();
 
       const disabledRow = new ActionRowBuilder().addComponents(
