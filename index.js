@@ -571,6 +571,15 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
 
+      // Verificar se o membro já tem cargo de time
+      const hasTeamRole = ALLOWED_TEAM_ROLES.some(id => interaction.member.roles.cache.has(id));
+      if (hasTeamRole) {
+        return interaction.reply({
+          content: `❌ Você já é de um time! Se quiser sair, use **/release** no canal <#1492354496259428392>.`,
+          ephemeral: true
+        });
+      }
+
       const posicao = interaction.options.getString('posicao');
       const exp = interaction.options.getString('exp');
       const plataforma = interaction.options.getString('plataforma');
