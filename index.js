@@ -67,6 +67,13 @@ const ALLOWED_RELEASE_CHANNELS = [
   '1492354496259428392',
 ];
 
+// Canal onde o jogador usa /friendly
+const ALLOWED_FRIENDLY_CHANNELS = [
+  '1491433748774912140',
+];
+// Canal onde o embed de friendly é enviado automaticamente
+const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
+
 // ═══════════════════════════════════════════════════════
 // 🚫 ANTI-INVITE
 // ═══════════════════════════════════════════════════════
@@ -289,6 +296,11 @@ const commands = [
   new SlashCommandBuilder()
     .setName('release')
     .setDescription('Se liberar de um time e voltar a ser Free Agent'),
+
+  new SlashCommandBuilder()
+    .setName('friendly')
+    .setDescription('Anunciar um pedido de friendly')
+    .addStringOption(opt => opt.setName('sobre').setDescription('Detalhes do friendly (horário, formato, etc)').setRequired(true)),
 ];
 
 client.once('ready', async () => {
@@ -672,6 +684,65 @@ client.on('interactionCreate', async (interaction) => {
         }
       } catch (err) {
         console.error('❌ Erro ao enviar scouting no canal de anúncios:', err);
+      }
+    }
+
+    // /friendly
+    else if (interaction.commandName === 'friendly') {
+      if (!ALLOWED_FRIENDLY_CHANNELS.includes(interaction.channelId)) {
+        const channelErrorEmbed = new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('❌ Canal Não Permitido')
+          .setDescription('Este comando só pode ser utilizado em canais específicos.')
+          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setTimestamp();
+        return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
+      }
+
+      if (!hasCommandPermission(interaction.member)) {
+        const noPermEmbed = new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('🔒 Sem Permissão')
+          .setDescription('Você não tem permissão para usar este comando.
+
+Apenas membros autorizados podem anunciar friendlies.')
+          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setTimestamp();
+        return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
+      }
+
+      const sobre = interaction.options.getString('sobre');
+
+      // Pegar o cargo de time do usuário
+      const teamRoleId = ALLOWED_TEAM_ROLES.find(id => interaction.member.roles.cache.has(id));
+      const teamRole = teamRoleId ? interaction.guild.roles.cache.get(teamRoleId) : null;
+      const teamName = teamRole ? teamRole.name : 'Time não identificado';
+
+      const friendlyEmbed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle('⚽ Pedido de Friendly')
+        .setDescription(`${interaction.user} está procurando um adversário para um friendly!`)
+        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: '🏟️ Time', value: teamName, inline: true },
+          { name: '👤 Responsável', value: `${interaction.user}`, inline: true },
+          { name: '📝 Sobre', value: sobre, inline: false },
+        )
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setTimestamp();
+
+      await interaction.reply({
+        content: '✅ Seu pedido de friendly foi publicado!',
+        ephemeral: true
+      });
+
+      try {
+        const announcementChannel = await interaction.guild.channels.fetch(FRIENDLY_ANNOUNCEMENT_CHANNEL);
+        if (announcementChannel) {
+          await announcementChannel.send({ embeds: [friendlyEmbed] });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao enviar friendly no canal de anúncios:', err);
       }
     }
 
