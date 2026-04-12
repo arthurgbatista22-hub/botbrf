@@ -79,6 +79,14 @@ const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
 const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)\/[a-zA-Z0-9]+/i;
 
 // ═══════════════════════════════════════════════════════
+// 🚫 ANTI-DIVULGAÇÃO
+// Bloqueia mensagens que começam com "alguem quer entrar"
+// Apenas o cargo ALLOWED_COMMAND_ROLE pode enviar isso
+// ═══════════════════════════════════════════════════════
+
+const DIVULGACAO_REGEX = /^algu[eé]m\s+quer\s+entrar/i;
+
+// ═══════════════════════════════════════════════════════
 // 🤖 RESPOSTAS AUTOMÁTICAS DE COMANDOS
 // ═══════════════════════════════════════════════════════
 
@@ -405,7 +413,7 @@ client.once('ready', async () => {
 });
 
 // ═══════════════════════════════════════════════════════
-// 💬 MENSAGENS — Anti-invite + Respostas automáticas
+// 💬 MENSAGENS — Anti-invite + Anti-divulgação + Respostas automáticas
 // ═══════════════════════════════════════════════════════
 
 client.on('messageCreate', async (message) => {
@@ -413,16 +421,14 @@ client.on('messageCreate', async (message) => {
   if (!message.guild) return;
 
   const msgLower = message.content.toLowerCase().trim();
+  const channelName = message.channel.name?.toLowerCase() || '';
 
-  // 🚫 ANTI-INVITE
- const channelName = message.channel.name?.toLowerCase() || '';
-
-if (
-  message.member &&
-  !message.member.permissions.has(PermissionFlagsBits.ManageMessages)
-) {
-  // ❌ só bloqueia se NÃO for canal ticket
-  if (!channelName.startsWith('ticket')) {
+  // 🚫 ANTI-INVITE (ignora canais de ticket)
+  if (
+    message.member &&
+    !message.member.permissions.has(PermissionFlagsBits.ManageMessages) &&
+    !channelName.startsWith('ticket')
+  ) {
     if (INVITE_REGEX.test(message.content)) {
       try {
         await message.delete();
@@ -430,17 +436,34 @@ if (
           content: `🚫 ${message.author}, **convites de outros servidores não são permitidos aqui!**`,
         });
         setTimeout(() => warning.delete().catch(() => {}), 5000);
-
-        console.log(
-          `🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`
-        );
+        console.log(`🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`);
       } catch (err) {
         console.error('Erro ao deletar convite:', err);
       }
       return;
     }
   }
-}
+
+  // 🚫 ANTI-DIVULGAÇÃO
+  // Bloqueia mensagens que começam com "alguem quer entrar"
+  // Apenas quem tem o cargo ALLOWED_COMMAND_ROLE pode enviar isso
+  if (DIVULGACAO_REGEX.test(msgLower)) {
+    const temPermissao = message.member && message.member.roles.cache.has(ALLOWED_COMMAND_ROLE);
+
+    if (!temPermissao) {
+      try {
+        await message.delete();
+        const warning = await message.channel.send({
+          content: `🚫 ${message.author}, **divulgações não são permitidas aqui!** Apenas membros autorizados podem fazer este tipo de anúncio.`,
+        });
+        setTimeout(() => warning.delete().catch(() => {}), 5000);
+        console.log(`🚫 Divulgação bloqueada de ${message.author.tag} em #${message.channel.name}`);
+      } catch (err) {
+        console.error('Erro ao deletar divulgação:', err);
+      }
+      return;
+    }
+  }
 
   // 🤖 RESPOSTAS AUTOMÁTICAS
   for (const entry of AUTO_RESPONSES) {
