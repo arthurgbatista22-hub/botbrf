@@ -67,19 +67,86 @@ const ALLOWED_RELEASE_CHANNELS = [
   '1492354496259428392',
 ];
 
-// Canal onde o jogador usa /friendly
 const ALLOWED_FRIENDLY_CHANNELS = [
   '1491433748774912140',
 ];
-// Canal onde o embed de friendly é enviado automaticamente
 const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
 
 // ═══════════════════════════════════════════════════════
 // 🚫 ANTI-INVITE
 // ═══════════════════════════════════════════════════════
 
-// Regex que detecta links de convite do Discord
 const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)\/[a-zA-Z0-9]+/i;
+
+// ═══════════════════════════════════════════════════════
+// 🤖 RESPOSTAS AUTOMÁTICAS DE COMANDOS
+// ═══════════════════════════════════════════════════════
+
+const AUTO_RESPONSES = [
+  {
+    keywords: [
+      'como uso fa', 'como usar fa', 'como faço fa', 'como faz fa',
+      'como anuncio free agent', 'como ser free agent', 'como postar fa',
+      'onde uso fa', 'onde faço fa', 'onde fica o fa', 'cadê o fa',
+      'o que é fa', 'oque e fa', 'pra que serve fa', 'como funciona fa',
+      'free agent como', 'como viro free agent', 'quero ser fa',
+      'como coloco free agent', 'como posto fa'
+    ],
+    response: '📢 Para se anunciar como **Free Agent**, use o comando `/fa` no canal <#1491433748774912140>!'
+  },
+  {
+    keywords: [
+      'como uso contract', 'como usar contract', 'como faço contract', 'como faz contract',
+      'como envio contrato', 'como mando contrato', 'como criar contrato',
+      'onde uso contract', 'onde faço contract', 'cadê o contract',
+      'como funciona contract', 'pra que serve contract', 'o que é contract',
+      'como contratar jogador', 'como contratar alguem', 'quero contratar',
+      'como propor contrato', 'como fazer contrato', 'como assinar contrato'
+    ],
+    response: '📋 Para propor um **Contrato**, use o comando `/contract` no canal <#1491433748774912140>!'
+  },
+  {
+    keywords: [
+      'como uso scouting', 'como usar scouting', 'como faço scouting', 'como faz scouting',
+      'como anuncio scouting', 'como postar scouting', 'onde uso scouting',
+      'cadê o scouting', 'como funciona scouting', 'pra que serve scouting',
+      'o que é scouting', 'oque e scouting', 'quero fazer scouting',
+      'como recrutar jogador', 'como procurar jogador', 'como buscar jogador'
+    ],
+    response: '🔍 Para anunciar um **Scouting**, use o comando `/scouting` no canal <#1491433748774912140>!'
+  },
+  {
+    keywords: [
+      'como uso friendly', 'como usar friendly', 'como faço friendly', 'como faz friendly',
+      'como marcar friendly', 'como agendar friendly', 'como postar friendly',
+      'onde uso friendly', 'cadê o friendly', 'como funciona friendly',
+      'pra que serve friendly', 'o que é friendly', 'oque e friendly',
+      'quero fazer friendly', 'como pedir friendly', 'como solicitar friendly'
+    ],
+    response: '⚽ Para solicitar um **Friendly**, use o comando `/friendly` no canal <#1491433748774912140>!'
+  },
+  {
+    keywords: [
+      'como uso release', 'como usar release', 'como faço release', 'como faz release',
+      'como sair do time', 'como saio do time', 'como me liberar', 'como se liberar',
+      'onde uso release', 'cadê o release', 'como funciona release',
+      'pra que serve release', 'o que é release', 'oque e release',
+      'quero sair do time', 'como deixar o time', 'como largar o time',
+      'como dar release', 'quero dar release', 'quero me liberar'
+    ],
+    response: '🔓 Para se **liberar de um time**, use o comando `/release` no canal <#1492354496259428392>!'
+  },
+  {
+    keywords: [
+      'quais comandos', 'lista de comandos', 'que comandos tem', 'quais são os comandos',
+      'que comandos existem', 'me manda os comandos', 'comandos do bot',
+      'help', 'ajuda', 'como usar o bot', 'como funciona o bot',
+      'o que o bot faz', 'que o bot faz', 'comandos disponiveis',
+      'comandos disponíveis', 'como usar os comandos'
+    ],
+    response: `📖 **Comandos disponíveis:**\n\n📢 \`/fa\` — Anunciar Free Agent → <#1491433748774912140>\n📋 \`/contract\` — Propor contrato → <#1491433748774912140>\n🔍 \`/scouting\` — Anunciar scouting → <#1491433748774912140>\n⚽ \`/friendly\` — Pedir friendly → <#1491433748774912140>\n🔓 \`/release\` — Sair do time → <#1492354496259428392>`
+  }
+];
 
 // ═══════════════════════════════════════════════════════
 
@@ -326,35 +393,42 @@ client.once('ready', async () => {
 });
 
 // ═══════════════════════════════════════════════════════
-// 🚫 ANTI-INVITE — Detecta e apaga links de convite
+// 💬 MENSAGENS — Anti-invite + Respostas automáticas
 // ═══════════════════════════════════════════════════════
 
 client.on('messageCreate', async (message) => {
-  // Ignorar bots e mensagens sem conteúdo
   if (message.author.bot) return;
   if (!message.guild) return;
 
-  // Ignorar admins e quem tem permissão de gerenciar mensagens
-  if (message.member && message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return;
+  const msgLower = message.content.toLowerCase().trim();
 
-  if (INVITE_REGEX.test(message.content)) {
-    try {
-      // Apagar a mensagem com o convite
-      await message.delete();
+  // 🚫 ANTI-INVITE
+  if (message.member && !message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+    if (INVITE_REGEX.test(message.content)) {
+      try {
+        await message.delete();
+        const warning = await message.channel.send({
+          content: `🚫 ${message.author}, **convites de outros servidores não são permitidos aqui!**`,
+        });
+        setTimeout(() => warning.delete().catch(() => {}), 5000);
+        console.log(`🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`);
+      } catch (err) {
+        console.error('Erro ao deletar convite:', err);
+      }
+      return;
+    }
+  }
 
-      // Enviar aviso
-      const warning = await message.channel.send({
-        content: `🚫 ${message.author}, **convites de outros servidores não são permitidos aqui!**`,
-      });
-
-      // Apagar o aviso após 5 segundos
-      setTimeout(() => {
-        warning.delete().catch(() => {});
-      }, 5000);
-
-      console.log(`🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`);
-    } catch (err) {
-      console.error('Erro ao deletar convite:', err);
+  // 🤖 RESPOSTAS AUTOMÁTICAS
+  for (const entry of AUTO_RESPONSES) {
+    const matched = entry.keywords.some(keyword => msgLower.includes(keyword));
+    if (matched) {
+      try {
+        await message.reply({ content: entry.response });
+      } catch (err) {
+        console.error('Erro ao enviar resposta automática:', err);
+      }
+      return;
     }
   }
 });
@@ -486,7 +560,6 @@ client.on('interactionCreate', async (interaction) => {
         ephemeral: true
       });
 
-      // ── NOTIFICAÇÃO POR DM ──
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0x5865f2)
@@ -583,7 +656,6 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ embeds: [channelErrorEmbed], ephemeral: true });
       }
 
-      // Verificar se o membro já tem cargo de time
       const hasTeamRole = ALLOWED_TEAM_ROLES.some(id => interaction.member.roles.cache.has(id));
       if (hasTeamRole) {
         return interaction.reply({
@@ -711,7 +783,6 @@ client.on('interactionCreate', async (interaction) => {
 
       const sobre = interaction.options.getString('sobre');
 
-      // Pegar o cargo de time do usuário
       const teamRoleId = ALLOWED_TEAM_ROLES.find(id => interaction.member.roles.cache.has(id));
       const teamRole = teamRoleId ? interaction.guild.roles.cache.get(teamRoleId) : null;
       const teamName = teamRole ? teamRole.name : 'Time não identificado';
