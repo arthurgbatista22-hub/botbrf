@@ -85,12 +85,20 @@ const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.c
 const AUTO_RESPONSES = [
   {
     keywords: [
+      // fa
       'como uso fa', 'como usar fa', 'como faço fa', 'como faz fa',
-      'como anuncio free agent', 'como ser free agent', 'como postar fa',
-      'onde uso fa', 'onde faço fa', 'onde fica o fa', 'cadê o fa',
-      'o que é fa', 'oque e fa', 'pra que serve fa', 'como funciona fa',
-      'free agent como', 'como viro free agent', 'quero ser fa',
-      'como coloco free agent', 'como posto fa'
+      'como anuncio fa', 'como ser fa', 'como postar fa', 'como manda fa',
+      'onde uso fa', 'onde faço fa', 'onde fica o fa', 'cade o fa',
+      'o que e fa', 'oque e fa', 'pra que serve fa', 'como funciona fa',
+      'free agent como', 'como viro fa', 'quero ser fa', 'como posto fa',
+      // free agent
+      'como uso free agent', 'como usar free agent', 'como faço free agent',
+      'como faz free agent', 'como anuncio free agent', 'como ser free agent',
+      'como postar free agent', 'como manda free agent', 'como mando free agent',
+      'onde uso free agent', 'onde faço free agent', 'cade o free agent',
+      'o que e free agent', 'oque e free agent', 'pra que serve free agent',
+      'como funciona free agent', 'como viro free agent', 'quero ser free agent',
+      'como coloco free agent', 'como posto free agent', 'como anunciar free agent',
     ],
     response: '📢 Para se anunciar como **Free Agent**, use o comando `/fa` no canal <#1491433748774912140>!'
   },
@@ -98,10 +106,11 @@ const AUTO_RESPONSES = [
     keywords: [
       'como uso contract', 'como usar contract', 'como faço contract', 'como faz contract',
       'como envio contrato', 'como mando contrato', 'como criar contrato',
-      'onde uso contract', 'onde faço contract', 'cadê o contract',
-      'como funciona contract', 'pra que serve contract', 'o que é contract',
+      'onde uso contract', 'onde faço contract', 'cade o contract',
+      'como funciona contract', 'pra que serve contract', 'o que e contract',
       'como contratar jogador', 'como contratar alguem', 'quero contratar',
-      'como propor contrato', 'como fazer contrato', 'como assinar contrato'
+      'como propor contrato', 'como fazer contrato', 'como assinar contrato',
+      'como manda contract', 'como mando contract',
     ],
     response: '📋 Para propor um **Contrato**, use o comando `/contract` no canal <#1491433748774912140>!'
   },
@@ -109,9 +118,10 @@ const AUTO_RESPONSES = [
     keywords: [
       'como uso scouting', 'como usar scouting', 'como faço scouting', 'como faz scouting',
       'como anuncio scouting', 'como postar scouting', 'onde uso scouting',
-      'cadê o scouting', 'como funciona scouting', 'pra que serve scouting',
-      'o que é scouting', 'oque e scouting', 'quero fazer scouting',
-      'como recrutar jogador', 'como procurar jogador', 'como buscar jogador'
+      'cade o scouting', 'como funciona scouting', 'pra que serve scouting',
+      'o que e scouting', 'oque e scouting', 'quero fazer scouting',
+      'como recrutar jogador', 'como procurar jogador', 'como buscar jogador',
+      'como manda scouting', 'como mando scouting',
     ],
     response: '🔍 Para anunciar um **Scouting**, use o comando `/scouting` no canal <#1491433748774912140>!'
   },
@@ -119,9 +129,10 @@ const AUTO_RESPONSES = [
     keywords: [
       'como uso friendly', 'como usar friendly', 'como faço friendly', 'como faz friendly',
       'como marcar friendly', 'como agendar friendly', 'como postar friendly',
-      'onde uso friendly', 'cadê o friendly', 'como funciona friendly',
-      'pra que serve friendly', 'o que é friendly', 'oque e friendly',
-      'quero fazer friendly', 'como pedir friendly', 'como solicitar friendly'
+      'onde uso friendly', 'cade o friendly', 'como funciona friendly',
+      'pra que serve friendly', 'o que e friendly', 'oque e friendly',
+      'quero fazer friendly', 'como pedir friendly', 'como solicitar friendly',
+      'como manda friendly', 'como mando friendly',
     ],
     response: '⚽ Para solicitar um **Friendly**, use o comando `/friendly` no canal <#1491433748774912140>!'
   },
@@ -129,22 +140,23 @@ const AUTO_RESPONSES = [
     keywords: [
       'como uso release', 'como usar release', 'como faço release', 'como faz release',
       'como sair do time', 'como saio do time', 'como me liberar', 'como se liberar',
-      'onde uso release', 'cadê o release', 'como funciona release',
-      'pra que serve release', 'o que é release', 'oque e release',
+      'onde uso release', 'cade o release', 'como funciona release',
+      'pra que serve release', 'o que e release', 'oque e release',
       'quero sair do time', 'como deixar o time', 'como largar o time',
-      'como dar release', 'quero dar release', 'quero me liberar'
+      'como dar release', 'quero dar release', 'quero me liberar',
+      'como manda release', 'como mando release',
     ],
     response: '🔓 Para se **liberar de um time**, use o comando `/release` no canal <#1492354496259428392>!'
   },
   {
     keywords: [
-      'quais comandos', 'lista de comandos', 'que comandos tem', 'quais são os comandos',
+      'quais comandos', 'lista de comandos', 'que comandos tem', 'quais sao os comandos',
       'que comandos existem', 'me manda os comandos', 'comandos do bot',
       'help', 'ajuda', 'como usar o bot', 'como funciona o bot',
       'o que o bot faz', 'que o bot faz', 'comandos disponiveis',
-      'comandos disponíveis', 'como usar os comandos'
+      'comandos disponíveis', 'como usar os comandos',
     ],
-    response: `📖 **Comandos disponíveis:**\n\n📢 \`/fa\` — Anunciar Free Agent → <#1491433748774912140>\n📋 \`/contract\` — Propor contrato → <#1491433748774912140>\n🔍 \`/scouting\` — Anunciar scouting → <#1491433748774912140>\n⚽ \`/friendly\` — Pedir friendly → <#1491433748774912140>\n🔓 \`/release\` — Sair do time → <#1492354496259428392>`
+    response: '📖 **Comandos disponíveis:**\n\n📢 `/fa` — Anunciar Free Agent → <#1491433748774912140>\n📋 `/contract` — Propor contrato → <#1491433748774912140>\n🔍 `/scouting` — Anunciar scouting → <#1491433748774912140>\n⚽ `/friendly` — Pedir friendly → <#1491433748774912140>\n🔓 `/release` — Sair do time → <#1492354496259428392>'
   }
 ];
 
