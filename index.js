@@ -77,6 +77,15 @@ const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
 // ═══════════════════════════════════════════════════════
 
 const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)\/[a-zA-Z0-9]+/i;
+// Dentro do anti-invite:
+const channelName = message.channel.name?.toLowerCase() || '';
+if (channelName.startsWith('ticket')) {
+  // ✅ libera convites
+} else {
+  if (INVITE_REGEX.test(message.content)) {
+    // 🚫 deleta
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // 🤖 RESPOSTAS AUTOMÁTICAS DE COMANDOS
