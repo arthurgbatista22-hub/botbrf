@@ -424,7 +424,14 @@ client.on('messageCreate', async (message) => {
   const msgLower = message.content.toLowerCase().trim();
 
   // 🚫 ANTI-INVITE
-  if (message.member && !message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+ const channelName = message.channel.name?.toLowerCase() || '';
+
+if (
+  message.member &&
+  !message.member.permissions.has(PermissionFlagsBits.ManageMessages)
+) {
+  // ❌ só bloqueia se NÃO for canal ticket
+  if (!channelName.startsWith('ticket')) {
     if (INVITE_REGEX.test(message.content)) {
       try {
         await message.delete();
@@ -432,13 +439,17 @@ client.on('messageCreate', async (message) => {
           content: `🚫 ${message.author}, **convites de outros servidores não são permitidos aqui!**`,
         });
         setTimeout(() => warning.delete().catch(() => {}), 5000);
-        console.log(`🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`);
+
+        console.log(
+          `🚫 Convite deletado de ${message.author.tag} em #${message.channel.name}`
+        );
       } catch (err) {
         console.error('Erro ao deletar convite:', err);
       }
       return;
     }
   }
+}
 
   // 🤖 RESPOSTAS AUTOMÁTICAS
   for (const entry of AUTO_RESPONSES) {
