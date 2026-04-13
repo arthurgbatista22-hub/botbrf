@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType } = require('discord.js');
 require('dotenv').config();
 
 const client = new Client({
@@ -80,16 +80,12 @@ const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.c
 
 // ═══════════════════════════════════════════════════════
 // 🚫 ANTI-DIVULGAÇÃO
-// Bloqueia mensagens que começam com "alguem quer entrar"
-// Apenas o cargo ALLOWED_COMMAND_ROLE pode enviar isso
 // ═══════════════════════════════════════════════════════
 
 const DIVULGACAO_REGEX = /^algu[eé]m\s+quer\s+entrar/i;
 
 // ═══════════════════════════════════════════════════════
 // 🚫 ANTI-LINK ROBLOX SERVIDOR PRIVADO
-// Bloqueia links https://www.roblox.com/share?code=
-// Exceto nos canais autorizados abaixo
 // ═══════════════════════════════════════════════════════
 
 const ROBLOX_PRIVATE_SERVER_REGEX = /https:\/\/www\.roblox\.com\/share\?code=/i;
@@ -108,13 +104,11 @@ const ALLOWED_ROBLOX_LINK_CHANNELS = [
 const AUTO_RESPONSES = [
   {
     keywords: [
-      // fa
       'como uso fa', 'como usar fa', 'como faço fa', 'como faz fa',
       'como anuncio fa', 'como ser fa', 'como postar fa', 'como manda fa',
       'onde uso fa', 'onde faço fa', 'onde fica o fa', 'cade o fa',
       'o que e fa', 'oque e fa', 'pra que serve fa', 'como funciona fa',
       'free agent como', 'como viro fa', 'quero ser fa', 'como posto fa',
-      // free agent
       'como uso free agent', 'como usar free agent', 'como faço free agent',
       'como faz free agent', 'como anuncio free agent', 'como ser free agent',
       'como postar free agent', 'como manda free agent', 'como mando free agent',
@@ -182,6 +176,26 @@ const AUTO_RESPONSES = [
     response: '📖 **Comandos disponíveis:**\n\n📢 `/fa` — Anunciar Free Agent → <#1491433748774912140>\n📋 `/contract` — Propor contrato → <#1491433748774912140>\n🔍 `/scouting` — Anunciar scouting → <#1491433748774912140>\n⚽ `/friendly` — Pedir friendly → <#1491433748774912140>\n🔓 `/release` — Sair do time → <#1492354496259428392>'
   }
 ];
+
+// ═══════════════════════════════════════════════════════
+// 📤 HELPER — Envia embed em canal normal OU fórum
+// ═══════════════════════════════════════════════════════
+
+async function sendToChannel(guild, channelId, payload, threadName) {
+  const channel = await guild.channels.fetch(channelId);
+  if (!channel) return;
+
+  // Canal de fórum (type 15) — cria tópico
+  if (channel.type === ChannelType.GuildForum) {
+    await channel.threads.create({
+      name: threadName,
+      message: payload,
+    });
+  } else {
+    // Canal normal
+    await channel.send(payload);
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 
@@ -428,7 +442,7 @@ client.once('ready', async () => {
 });
 
 // ═══════════════════════════════════════════════════════
-// 💬 MENSAGENS — Anti-invite + Anti-divulgação + Respostas automáticas
+// 💬 MENSAGENS
 // ═══════════════════════════════════════════════════════
 
 client.on('messageCreate', async (message) => {
@@ -438,7 +452,7 @@ client.on('messageCreate', async (message) => {
   const msgLower = message.content.toLowerCase().trim();
   const channelName = message.channel.name?.toLowerCase() || '';
 
-  // 🚫 ANTI-INVITE (ignora canais de ticket)
+  // 🚫 ANTI-INVITE
   if (
     message.member &&
     !message.member.permissions.has(PermissionFlagsBits.ManageMessages) &&
@@ -460,11 +474,8 @@ client.on('messageCreate', async (message) => {
   }
 
   // 🚫 ANTI-DIVULGAÇÃO
-  // Bloqueia mensagens que começam com "alguem quer entrar"
-  // Apenas quem tem o cargo ALLOWED_COMMAND_ROLE pode enviar isso
   if (DIVULGACAO_REGEX.test(msgLower)) {
     const temPermissao = message.member && message.member.roles.cache.has(ALLOWED_COMMAND_ROLE);
-
     if (!temPermissao) {
       try {
         await message.delete();
@@ -622,14 +633,16 @@ client.on('interactionCreate', async (interaction) => {
       );
 
       try {
-        const announcementChannel = await interaction.guild.channels.fetch(CONTRACT_ANNOUNCEMENT_CHANNEL);
-        if (announcementChannel) {
-          await announcementChannel.send({
+        await sendToChannel(
+          interaction.guild,
+          CONTRACT_ANNOUNCEMENT_CHANNEL,
+          {
             content: `🔔 ${signee}, um contrato foi proposto por ${contractor}.`,
             embeds: [embed],
             components: [row],
-          });
-        }
+          },
+          `Contract — ${signee.username}`
+        );
       } catch (err) {
         console.error('❌ Erro ao enviar contract no canal de anúncios:', err);
       }
@@ -773,10 +786,12 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       try {
-        const announcementChannel = await interaction.guild.channels.fetch(FA_ANNOUNCEMENT_CHANNEL);
-        if (announcementChannel) {
-          await announcementChannel.send({ embeds: [faEmbed] });
-        }
+        await sendToChannel(
+          interaction.guild,
+          FA_ANNOUNCEMENT_CHANNEL,
+          { embeds: [faEmbed] },
+          `FA — ${interaction.user.username}`
+        );
       } catch (err) {
         console.error('❌ Erro ao enviar FA no canal de anúncios:', err);
       }
@@ -829,10 +844,12 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       try {
-        const announcementChannel = await interaction.guild.channels.fetch(SCOUTING_ANNOUNCEMENT_CHANNEL);
-        if (announcementChannel) {
-          await announcementChannel.send({ embeds: [scoutingEmbed] });
-        }
+        await sendToChannel(
+          interaction.guild,
+          SCOUTING_ANNOUNCEMENT_CHANNEL,
+          { embeds: [scoutingEmbed] },
+          `Scouting — ${scout.username}`
+        );
       } catch (err) {
         console.error('❌ Erro ao enviar scouting no canal de anúncios:', err);
       }
@@ -885,10 +902,12 @@ client.on('interactionCreate', async (interaction) => {
       });
 
       try {
-        const announcementChannel = await interaction.guild.channels.fetch(FRIENDLY_ANNOUNCEMENT_CHANNEL);
-        if (announcementChannel) {
-          await announcementChannel.send({ embeds: [friendlyEmbed] });
-        }
+        await sendToChannel(
+          interaction.guild,
+          FRIENDLY_ANNOUNCEMENT_CHANNEL,
+          { embeds: [friendlyEmbed] },
+          `Friendly — ${interaction.user.username}`
+        );
       } catch (err) {
         console.error('❌ Erro ao enviar friendly no canal de anúncios:', err);
       }
