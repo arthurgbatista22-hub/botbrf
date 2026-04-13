@@ -87,6 +87,21 @@ const INVITE_REGEX = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.c
 const DIVULGACAO_REGEX = /^algu[eé]m\s+quer\s+entrar/i;
 
 // ═══════════════════════════════════════════════════════
+// 🚫 ANTI-LINK ROBLOX SERVIDOR PRIVADO
+// Bloqueia links https://www.roblox.com/share?code=
+// Exceto nos canais autorizados abaixo
+// ═══════════════════════════════════════════════════════
+
+const ROBLOX_PRIVATE_SERVER_REGEX = /https:\/\/www\.roblox\.com\/share\?code=/i;
+
+const ALLOWED_ROBLOX_LINK_CHANNELS = [
+  '1491438344130007332',
+  '1491439536545202216',
+  '1491439591654166618',
+  '1492342601758544033',
+];
+
+// ═══════════════════════════════════════════════════════
 // 🤖 RESPOSTAS AUTOMÁTICAS DE COMANDOS
 // ═══════════════════════════════════════════════════════
 
@@ -460,6 +475,24 @@ client.on('messageCreate', async (message) => {
         console.log(`🚫 Divulgação bloqueada de ${message.author.tag} em #${message.channel.name}`);
       } catch (err) {
         console.error('Erro ao deletar divulgação:', err);
+      }
+      return;
+    }
+  }
+
+  // 🚫 ANTI-LINK ROBLOX SERVIDOR PRIVADO
+  if (ROBLOX_PRIVATE_SERVER_REGEX.test(message.content)) {
+    const canalPermitido = ALLOWED_ROBLOX_LINK_CHANNELS.includes(message.channelId);
+    if (!canalPermitido) {
+      try {
+        await message.delete();
+        const warning = await message.channel.send({
+          content: `🚫 ${message.author}, **links de servidores privados do Roblox não são permitidos aqui!** Use os canais específicos para isso.`,
+        });
+        setTimeout(() => warning.delete().catch(() => {}), 5000);
+        console.log(`🚫 Link Roblox bloqueado de ${message.author.tag} em #${message.channel.name}`);
+      } catch (err) {
+        console.error('Erro ao deletar link Roblox:', err);
       }
       return;
     }
