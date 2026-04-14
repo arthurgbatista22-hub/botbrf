@@ -1,8 +1,14 @@
+// ┌─────────────────────────────────────┐
+// │   🎁 SISTEMA DE DROPS PERSONALIZADO  │
+// └─────────────────────────────────────┘
+
 const {
   ActionRowBuilder,
   EmbedBuilder,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
+  REST,
+  Routes,
 } = require('discord.js');
 const fs = require('fs');
 
@@ -45,10 +51,12 @@ const DEFAULT_DROP_QUESTIONS = [
   {
     question: 'Qual é a capital do Brasil?',
     answer: 'brasília',
+    acceptedAnswers: ['brasília', 'brasilia'],
   },
   {
     question: 'Qual é o maior oceano do planeta?',
     answer: 'pacífico',
+    acceptedAnswers: ['pacífico', 'pacifico'],
   },
   {
     question: 'Quanto é 7 x 8?',
@@ -63,10 +71,12 @@ const DEFAULT_DROP_QUESTIONS = [
   {
     question: 'Qual é o planeta mais próximo do Sol?',
     answer: 'mercúrio',
+    acceptedAnswers: ['mercúrio', 'mercurio'],
   },
   {
     question: 'Em que continente fica o Egito?',
     answer: 'áfrica',
+    acceptedAnswers: ['áfrica', 'africa'],
   },
   {
     question: 'Qual é o resultado de 100 ÷ 4?',
@@ -81,6 +91,7 @@ const DEFAULT_DROP_QUESTIONS = [
   {
     question: 'Qual é o metal líquido à temperatura ambiente?',
     answer: 'mercúrio',
+    acceptedAnswers: ['mercúrio', 'mercurio'],
   },
   {
     question: 'Qual é o plural de "cidadão"?',
@@ -177,20 +188,30 @@ function writePrizeExpirations(entries) {
  * @param {import('discord.js').Client} client
  * @param {{
  *   commands: any[],
- *   defaultChannelId: string,
+ *   defaultChannelId?: string,
  *   canStartDrop: (member: any) => boolean,
- *   guildId?: string,
+ *   guildId: string,
+ *   token: string,
  *   questions?: Array<{question:string,answer:string,acceptedAnswers?:string[]}>
  * }} options
  */
 function registerDropSystem(client, options) {
   const {
     commands,
-    defaultChannelId,
+    defaultChannelId = '1491433665862045897', // ← SEU CANAL PADRÃO AQUI!
     canStartDrop,
     guildId,
+    token,
     questions = DEFAULT_DROP_QUESTIONS,
   } = options;
+
+  if (!token) {
+    throw new Error('❌ TOKEN é obrigatório para registrar o sistema de drops!');
+  }
+  
+  if (!guildId) {
+    throw new Error('❌ GUILD_ID é obrigatório para registrar o sistema de drops!');
+  }
 
   let activeDrop = null;
   const pendingPrizeSelections = new Map();
@@ -253,6 +274,7 @@ function registerDropSystem(client, options) {
 
       if (member.roles.cache.has(entry.roleId)) {
         await member.roles.remove(entry.roleId).catch(() => null);
+        console.log(`🔄 Cargo expirado removido de ${member.user.tag}`);
       }
     } catch (err) {
       console.error('Erro ao remover cargo expirado do drop:', err);
@@ -345,6 +367,7 @@ function registerDropSystem(client, options) {
       startedAt: Date.now(),
     };
 
+    console.log(`🎁 Drop iniciado por ${actorTag} - Pergunta: ${picked.question}`);
     return { ok: true };
   }
 
@@ -371,7 +394,10 @@ function registerDropSystem(client, options) {
       return;
     }
 
-    const channel = interaction.guild.channels.cache.get(defaultChannelId) || interaction.channel;
+    // Usa o canal padrão OU o canal onde foi usado
+    const channel = defaultChannelId 
+      ? (interaction.guild.channels.cache.get(defaultChannelId) || interaction.channel)
+      : interaction.channel;
 
     const result = await startDrop(channel, interaction.user.tag, question, answer);
     if (!result.ok) {
@@ -394,9 +420,12 @@ function registerDropSystem(client, options) {
     const winnerEmbed = buildWinnerEmbed(message.author.id);
     await message.channel.send({ embeds: [winnerEmbed] }).catch(() => {});
 
+    console.log(`🎉 ${message.author.tag} ganhou o drop!`);
+
     try {
       await sendPrizeDm(message.guild, message.author);
     } catch (err) {
+      console.error(`❌ Erro ao enviar DM para ${message.author.tag}:`, err);
       await message.channel
         .send({
           content: `⚠️ <@${message.author.id}>, não consegui te enviar DM. Abra sua DM e fale com a staff para receber o prêmio.`,
@@ -460,6 +489,9 @@ function registerDropSystem(client, options) {
     schedulePrizeRoleRemoval(expirationEntry);
 
     pendingPrizeSelections.delete(interaction.customId);
+    
+    console.log(`✅ ${interaction.user.tag} escolheu o cargo: ${selected}`);
+    
     await interaction.update({
       content: '✅ Prêmio resgatado com sucesso! Cargo aplicado no servidor.',
       embeds: [],
@@ -469,22 +501,9 @@ function registerDropSystem(client, options) {
 
   // Carregar expirações salvas quando o bot iniciar
   client.once('ready', async () => {
-    console.log('✅ Sistema de drops carregado');
-    
-    // Debug: mostrar comandos registrados
-    console.log('📋 Comandos disponíveis:', commands.map(c => c.name));
-    
-    if (guildId) {
-      try {
-        const guild = await client.guilds.fetch(guildId);
-        const registeredCommands = await guild.commands.fetch();
-        console.log('✅ Comandos registrados no servidor:', 
-          registeredCommands.map(c => c.name).join(', ')
-        );
-      } catch (err) {
-        console.error('❌ Erro ao verificar comandos:', err);
-      }
-    }
+    console.log('┌─────────────────────────────────────┐');
+    console.log('│   🎁 SISTEMA DE DROPS INICIANDO    │');
+    console.log('└─────────────────────────────────────┘');
     
     // Carregar expirações de cargos salvos
     const expirations = readPrizeExpirations();
@@ -492,6 +511,32 @@ function registerDropSystem(client, options) {
       schedulePrizeRoleRemoval(entry);
     }
     console.log(`📦 ${expirations.length} expiração(ões) de cargo carregada(s)`);
+    
+    // Forçar registro do comando /drop
+    try {
+      const rest = new REST({ version: '10' }).setToken(token);
+      
+      console.log('🔄 Registrando comando /drop...');
+      console.log(`📍 Canal padrão: #drops (${defaultChannelId})`);
+      
+      await rest.put(
+        Routes.applicationGuildCommands(client.user.id, guildId),
+        { body: commands.map(cmd => cmd.toJSON()) }
+      );
+      
+      console.log('✅ Comando /drop registrado com sucesso!');
+      console.log(`🤖 Bot: ${client.user.tag}`);
+      console.log(`🏰 Servidor: ${guildId}`);
+    } catch (error) {
+      console.error('❌ ERRO ao registrar comando /drop:', error);
+      if (error.code === 50001) {
+        console.error('⚠️ Bot sem permissão no servidor!');
+      }
+    }
+    
+    console.log('┌─────────────────────────────────────┐');
+    console.log('│ ✅ SISTEMA DE DROPS CARREGADO 100%  │');
+    console.log('└─────────────────────────────────────┘');
   });
 
 }
