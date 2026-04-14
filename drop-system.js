@@ -9,7 +9,6 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-
 const fs = require('fs');
 require('dotenv').config();
 
@@ -34,7 +33,21 @@ const DROP_PRIZE_ROLES = {
   pic_perm: '1491772794407751941',
 };
 
-const DEFAULT_DROP_QUESTIONS = [ /* ... suas perguntas permanecem iguais ... */ ];
+const DEFAULT_DROP_QUESTIONS = [
+  { question: 'Qual o osso mais longo do corpo humano?', answer: 'femur', acceptedAnswers: ['femur', 'fêmur'] },
+  { question: 'Qual planeta é conhecido como planeta vermelho?', answer: 'marte', acceptedAnswers: ['marte'] },
+  { question: 'Quantos segundos tem 1 minuto?', answer: '60', acceptedAnswers: ['60', 'sessenta'] },
+  { question: 'Qual é a capital do Brasil?', answer: 'brasília', acceptedAnswers: ['brasília', 'brasilia'] },
+  { question: 'Qual é o maior oceano do planeta?', answer: 'pacífico', acceptedAnswers: ['pacífico', 'pacifico'] },
+  { question: 'Quanto é 7 x 8?', answer: '56', acceptedAnswers: ['56', 'cinquenta e seis'] },
+  { question: 'Qual gás as plantas absorvem da atmosfera?', answer: 'dióxido de carbono', acceptedAnswers: ['dióxido de carbono', 'gas carbonico', 'gás carbônico', 'co2'] },
+  { question: 'Qual é o planeta mais próximo do Sol?', answer: 'mercúrio', acceptedAnswers: ['mercúrio', 'mercurio'] },
+  { question: 'Em que continente fica o Egito?', answer: 'áfrica', acceptedAnswers: ['áfrica', 'africa'] },
+  { question: 'Qual é o resultado de 100 ÷ 4?', answer: '25', acceptedAnswers: ['25', 'vinte e cinco'] },
+  { question: 'Qual linguagem roda no Node.js?', answer: 'javascript', acceptedAnswers: ['javascript', 'js'] },
+  { question: 'Qual é o metal líquido à temperatura ambiente?', answer: 'mercúrio', acceptedAnswers: ['mercúrio', 'mercurio'] },
+  { question: 'Qual é o plural de "cidadão"?', answer: 'cidadãos', acceptedAnswers: ['cidadãos', 'cidadaos'] },
+];
 
 function normalize(input) {
   return (input || '')
@@ -94,7 +107,7 @@ function hasAuthorizedDropRole(member) {
   return AUTHORIZED_DROP_ROLE_IDS.some(roleId => member.roles.cache.has(roleId));
 }
 
-// ==================== EXPIRAÇÕES (mantidas iguais) ====================
+// ==================== EXPIRAÇÕES ====================
 function readPrizeExpirations() {
   if (!fs.existsSync(PRIZE_EXPIRATIONS_FILE)) return [];
   try {
@@ -124,20 +137,11 @@ function registerDropSystem(client, options) {
     canStartDrop,
   } = options || {};
 
-  const token = process.env.DISCORD_TOKEN;
-  const guildId = process.env.GUILD_ID;
-
-  console.log('\n🔍 [DEBUG] DISCORD_TOKEN:', token ? '✅ Encontrado' : '❌ NÃO ENCONTRADO');
-  console.log('🔍 [DEBUG] GUILD_ID:', guildId || '❌ NÃO ENCONTRADO');
-
-  if (!token) throw new Error('❌ DISCORD_TOKEN não encontrado no .env!');
-  if (!guildId) throw new Error('❌ GUILD_ID não encontrado no .env!');
-
   let activeDrop = null;
   const pendingPrizeSelections = new Map();
   const expirationTimers = new Map();
 
-  // ==================== FUNÇÕES INTERNAS (mantidas) ====================
+  // ==================== FUNÇÕES INTERNAS ====================
   function keyForExpiration(entry) {
     return `${entry.guildId}:${entry.userId}:${entry.roleId}`;
   }
@@ -190,7 +194,7 @@ function registerDropSystem(client, options) {
     }
   }
 
-  // ==================== FUNÇÃO PARA ENVIAR DM DO PRÊMIO ====================
+  // ==================== ENVIAR DM DO PRÊMIO ====================
   async function sendPrizeDm(guild, user) {
     const dmEmbed = buildWinnerDmEmbed();
     const selectId = `drop_prize_${guild.id}_${user.id}_${Date.now()}`;
@@ -238,10 +242,10 @@ function registerDropSystem(client, options) {
       startedBy: actorTag 
     };
 
-    console.log(`🎁 Drop iniciado por ${actorTag} | Pergunta: ${picked.question}`);
+    console.log(`🎁 Drop iniciado por ${actorTag}`);
   }
 
-  // ==================== COMANDO !drop + BOTÃO ====================
+  // ==================== COMANDO !drop ====================
   client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (!message.content.trim().toLowerCase().startsWith('!drop')) return;
@@ -254,23 +258,22 @@ function registerDropSystem(client, options) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('open_drop_modal')
-        .setLabel('Criar Drop')
+        .setLabel('🎁 Criar Drop')
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('🎁')
     );
 
     await message.reply({
-      content: '**🎁 Criar Novo Drop**\nClique no botão abaixo e preencha a pergunta e a resposta:',
+      content: '**🎁 Criar Novo Drop**\nClique no botão abaixo para definir a pergunta e a resposta:',
       components: [row]
     });
   });
 
-  // ==================== INTERACTIONS (Botão + Modal + Prêmio) ====================
+  // ==================== INTERACTIONS ====================
   client.on('interactionCreate', async (interaction) => {
-    // ==================== BOTÃO → ABRIR MODAL ====================
+    // Botão → Abre o Modal
     if (interaction.isButton() && interaction.customId === 'open_drop_modal') {
       const modal = new ModalBuilder()
-        .setCustomId('drop_create_modal')
+        .setCustomId('drop_modal')
         .setTitle('🎁 Criar Drop Personalizado');
 
       const questionInput = new TextInputBuilder()
@@ -289,17 +292,17 @@ function registerDropSystem(client, options) {
         .setRequired(true)
         .setMaxLength(100);
 
-      const firstRow = new ActionRowBuilder().addComponents(questionInput);
-      const secondRow = new ActionRowBuilder().addComponents(answerInput);
-
-      modal.addComponents(firstRow, secondRow);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(questionInput),
+        new ActionRowBuilder().addComponents(answerInput)
+      );
 
       await interaction.showModal(modal);
       return;
     }
 
-    // ==================== MODAL SUBMIT ====================
-    if (interaction.isModalSubmit() && interaction.customId === 'drop_create_modal') {
+    // Modal enviado
+    if (interaction.isModalSubmit() && interaction.customId === 'drop_modal') {
       const question = interaction.fields.getTextInputValue('question').trim();
       const answer = interaction.fields.getTextInputValue('answer').trim();
 
@@ -309,16 +312,13 @@ function registerDropSystem(client, options) {
 
       const channel = interaction.guild.channels.cache.get(defaultChannelId) || interaction.channel;
 
-      await interaction.reply({ 
-        content: '✅ Drop sendo criado...', 
-        ephemeral: true 
-      });
+      await interaction.reply({ content: '✅ Drop iniciado com sucesso!', ephemeral: true });
 
       await startDrop(channel, interaction.user.tag, question, answer);
       return;
     }
 
-    // ==================== MENU DE PRÊMIO ====================
+    // Menu de seleção de prêmio
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('drop_prize_')) {
       const selection = pendingPrizeSelections.get(interaction.customId);
       if (!selection || interaction.user.id !== selection.userId) {
@@ -351,7 +351,7 @@ function registerDropSystem(client, options) {
     }
   });
 
-  // ==================== RESPOSTA DO DROP (mensagens no chat) ====================
+  // ==================== RESPOSTAS NO CHAT ====================
   client.on('messageCreate', async (message) => {
     if (!activeDrop || message.author.bot || message.channelId !== activeDrop.channelId) return;
 
@@ -377,7 +377,7 @@ function registerDropSystem(client, options) {
     console.log('│         🎁 SISTEMA DE DROPS INICIADO       │');
     console.log('└────────────────────────────────────────────┘');
     console.log(`🤖 Bot: ${client.user.tag}`);
-    console.log(`🏰 Guild ID: ${guildId}`);
+    console.log(`🏰 Guild ID: ${process.env.GUILD_ID}`);
     console.log(`📍 Canal padrão: ${defaultChannelId}`);
 
     const expirations = readPrizeExpirations();
@@ -385,7 +385,7 @@ function registerDropSystem(client, options) {
     console.log(`📦 ${expirations.length} cargo(s) com expiração carregados.`);
 
     console.log('\n✅ Sistema de Drops carregado com sucesso!');
-    console.log('📌 Use: **!drop** para abrir o painel de criação.\n');
+    console.log('📌 Digite **!drop** para criar um drop.\n');
   });
 }
 
