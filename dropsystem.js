@@ -107,10 +107,10 @@ function buildDropEmbed(question) {
     .setTitle('🎁 DROP RÁPIDO!')
     .setDescription(
       `**${question}**\n\n` +
-      'Responda no chat em até **1 minuto** para ganhar um cargo\n' +
-      '*(Scrim Hoster, Vip Bronze, Pic Perm. [5 dias])*'
+      'Responda no chat em até **1 minuto** para ganhar um cargo VIP!\n' +
+      '*(Olheiro [5 Dias], Scrim Hoster ou Pic Perm)*'
     )
-    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setFooter({ text: 'PAFO — Drops System' })
     .setTimestamp();
 }
 
@@ -122,7 +122,7 @@ function buildWinnerEmbed(winnerId) {
       `Parabéns <@${winnerId}>! Você acertou a resposta e ganhou o drop.\n` +
       'Verifique suas DMs para escolher seu prêmio.'
     )
-    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setFooter({ text: 'PAFO — Drops System' })
     .setTimestamp();
 }
 
@@ -134,7 +134,7 @@ function buildWinnerDmEmbed() {
       'Você respondeu corretamente no chat e garantiu seu prêmio. ' +
         'Escolha abaixo qual cargo você deseja receber no servidor.'
     )
-    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setFooter({ text: 'PAFO — Drops System' })
     .setTimestamp();
 }
 
@@ -143,7 +143,7 @@ function buildTimeoutEmbed(answer) {
     .setColor(0xed4245)
     .setTitle('⌛ Drop encerrado')
     .setDescription(`Ninguém acertou a tempo. Resposta correta: **${answer}**.`)
-    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setFooter({ text: 'PAFO — Drops System' })
     .setTimestamp();
 }
 
@@ -179,6 +179,8 @@ function writePrizeExpirations(entries) {
  *   commands: any[],
  *   defaultChannelId: string,
  *   canStartDrop: (member: any) => boolean,
+ *   guildId?: string,
+ *   forceRegisterOnReady?: boolean,
  *   questions?: Array<{question:string,answer:string,acceptedAnswers?:string[]}>
  * }} options
  */
@@ -187,6 +189,8 @@ function registerDropSystem(client, options) {
     commands,
     defaultChannelId,
     canStartDrop,
+    guildId,
+    forceRegisterOnReady = true,
     questions = DEFAULT_DROP_QUESTIONS,
   } = options;
 
@@ -257,23 +261,23 @@ function registerDropSystem(client, options) {
     }
   }
 
-  commands.push(
-    new SlashCommandBuilder()
-      .setName('drop')
-      .setDescription('Inicia um drop manual de pergunta e resposta')
-      .addStringOption((opt) =>
-        opt
-          .setName('pergunta')
-          .setDescription('Pergunta do drop (opcional, usa aleatória se vazio)')
-          .setRequired(false)
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName('resposta')
-          .setDescription('Resposta correta (obrigatória se definir pergunta)')
-          .setRequired(false)
-      )
-  );
+  const dropCommand = new SlashCommandBuilder()
+    .setName('drop')
+    .setDescription('Inicia um drop manual de pergunta e resposta')
+    .addStringOption((opt) =>
+      opt
+        .setName('pergunta')
+        .setDescription('Pergunta do drop (opcional, usa aleatória se vazio)')
+        .setRequired(false)
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName('resposta')
+        .setDescription('Resposta correta (obrigatória se definir pergunta)')
+        .setRequired(false)
+    );
+
+  commands.push(dropCommand);
 
   async function sendPrizeDm(guild, user) {
     const dmEmbed = buildWinnerDmEmbed();
@@ -465,7 +469,22 @@ function registerDropSystem(client, options) {
     });
   });
 
-  client.once('ready', () => {
+  client.once('ready', async () => {
+    if (forceRegisterOnReady) {
+      try {
+        if (guildId) {
+          const guild = await client.guilds.fetch(guildId);
+          await guild.commands.create(dropCommand.toJSON());
+          console.log(`✅ /drop registrado no servidor ${guildId}`);
+        } else if (client.application) {
+          await client.application.commands.create(dropCommand.toJSON());
+          console.log('✅ /drop registrado globalmente');
+        }
+      } catch (err) {
+        console.error('❌ Erro ao registrar /drop automaticamente:', err);
+      }
+    }
+
     const expirations = readPrizeExpirations();
     for (const entry of expirations) {
       schedulePrizeRoleRemoval(entry);
