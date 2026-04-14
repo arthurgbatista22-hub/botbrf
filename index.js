@@ -1072,18 +1072,4 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// No final do bot.js, antes de client.login
-
-const { registerDropSystem } = require('./dropSystem');
-
-// ====================== SISTEMA DE DROP ======================
-const { registerDropSystem } = require('./dropSystem');
-
-// Registra o sistema de drop
-registerDropSystem(client, {
-  defaultChannelId: '1491433665862045897',   // canal onde o drop vai aparecer
-  canStartDrop: (member) => member.roles.cache.has('1491439508309278831') // cargo permitido (mude se quiser)
-});
-// ============================================================
-
 client.login(process.env.DISCORD_TOKEN);
