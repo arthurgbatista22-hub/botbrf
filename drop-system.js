@@ -1,7 +1,3 @@
-// ┌─────────────────────────────────────┐
-// │   🎁 SISTEMA DE DROPS PERSONALIZADO  │
-// └─────────────────────────────────────┘
-
 const {
   ActionRowBuilder,
   EmbedBuilder,
@@ -190,27 +186,29 @@ function writePrizeExpirations(entries) {
  *   commands: any[],
  *   defaultChannelId?: string,
  *   canStartDrop: (member: any) => boolean,
- *   guildId: string,
- *   token: string,
  *   questions?: Array<{question:string,answer:string,acceptedAnswers?:string[]}>
  * }} options
  */
 function registerDropSystem(client, options) {
   const {
     commands,
-    defaultChannelId = '1491433665862045897', // ← SEU CANAL PADRÃO AQUI!
+    defaultChannelId = '1491433665862045897',
     canStartDrop,
-    guildId,
-    token,
     questions = DEFAULT_DROP_QUESTIONS,
   } = options;
 
+  // Buscar variáveis do ambiente
+  require('dotenv').config();
+  
+  const token = process.env.DISCORD_TOKEN;
+  const guildId = process.env.GUILD_ID;
+
   if (!token) {
-    throw new Error('❌ TOKEN é obrigatório para registrar o sistema de drops!');
+    throw new Error('❌ DISCORD_TOKEN não encontrado no arquivo .env!');
   }
   
   if (!guildId) {
-    throw new Error('❌ GUILD_ID é obrigatório para registrar o sistema de drops!');
+    throw new Error('❌ GUILD_ID não encontrado no arquivo .env!');
   }
 
   let activeDrop = null;
@@ -526,11 +524,13 @@ function registerDropSystem(client, options) {
       
       console.log('✅ Comando /drop registrado com sucesso!');
       console.log(`🤖 Bot: ${client.user.tag}`);
-      console.log(`🏰 Servidor: ${guildId}`);
+      console.log(`🏰 Guild ID: ${guildId}`);
     } catch (error) {
       console.error('❌ ERRO ao registrar comando /drop:', error);
       if (error.code === 50001) {
         console.error('⚠️ Bot sem permissão no servidor!');
+      } else if (error.code === 'ENOTFOUND') {
+        console.error('⚠️ Problema de conexão com a API do Discord!');
       }
     }
     
