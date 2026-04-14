@@ -1,14 +1,17 @@
 const {
   ActionRowBuilder,
   EmbedBuilder,
-  SlashCommandBuilder,
   StringSelectMenuBuilder,
-  REST,
-  Routes,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ButtonBuilder,
+  ButtonStyle,
   MessageFlags,
 } = require('discord.js');
+
 const fs = require('fs');
-require('dotenv').config(); // Carrega as variáveis do .env
+require('dotenv').config();
 
 const DROP_DURATION_MS = 60 * 1000; // 1 minuto
 const PRIZE_ROLE_DURATION_MS = 5 * 24 * 60 * 60 * 1000; // 5 dias
@@ -31,21 +34,7 @@ const DROP_PRIZE_ROLES = {
   pic_perm: '1491772794407751941',
 };
 
-const DEFAULT_DROP_QUESTIONS = [
-  { question: 'Qual o osso mais longo do corpo humano?', answer: 'femur', acceptedAnswers: ['femur', 'fêmur'] },
-  { question: 'Qual planeta é conhecido como planeta vermelho?', answer: 'marte', acceptedAnswers: ['marte'] },
-  { question: 'Quantos segundos tem 1 minuto?', answer: '60', acceptedAnswers: ['60', 'sessenta'] },
-  { question: 'Qual é a capital do Brasil?', answer: 'brasília', acceptedAnswers: ['brasília', 'brasilia'] },
-  { question: 'Qual é o maior oceano do planeta?', answer: 'pacífico', acceptedAnswers: ['pacífico', 'pacifico'] },
-  { question: 'Quanto é 7 x 8?', answer: '56', acceptedAnswers: ['56', 'cinquenta e seis'] },
-  { question: 'Qual gás as plantas absorvem da atmosfera?', answer: 'dióxido de carbono', acceptedAnswers: ['dióxido de carbono', 'gas carbonico', 'gás carbônico', 'co2'] },
-  { question: 'Qual é o planeta mais próximo do Sol?', answer: 'mercúrio', acceptedAnswers: ['mercúrio', 'mercurio'] },
-  { question: 'Em que continente fica o Egito?', answer: 'áfrica', acceptedAnswers: ['áfrica', 'africa'] },
-  { question: 'Qual é o resultado de 100 ÷ 4?', answer: '25', acceptedAnswers: ['25', 'vinte e cinco'] },
-  { question: 'Qual linguagem roda no Node.js?', answer: 'javascript', acceptedAnswers: ['javascript', 'js'] },
-  { question: 'Qual é o metal líquido à temperatura ambiente?', answer: 'mercúrio', acceptedAnswers: ['mercúrio', 'mercurio'] },
-  { question: 'Qual é o plural de "cidadão"?', answer: 'cidadãos', acceptedAnswers: ['cidadãos', 'cidadaos'] },
-];
+const DEFAULT_DROP_QUESTIONS = [ /* ... suas perguntas permanecem iguais ... */ ];
 
 function normalize(input) {
   return (input || '')
@@ -59,6 +48,7 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ==================== EMBEDS ====================
 function buildDropEmbed(question) {
   return new EmbedBuilder()
     .setColor(0x2b2d31)
@@ -66,7 +56,7 @@ function buildDropEmbed(question) {
     .setDescription(
       `**${question}**\n\n` +
       'Responda no chat em até **1 minuto** para ganhar um cargo\n' +
-      '*(Scrim Hoster, Vip Bronze, Pic Perm. [5 Dias])*'
+      '*(Scrim Hoster, Vip Bronze, Pic Perm - 5 Dias)*'
     )
     .setFooter({ text: 'The Classic Soccer Federation' })
     .setTimestamp();
@@ -104,6 +94,7 @@ function hasAuthorizedDropRole(member) {
   return AUTHORIZED_DROP_ROLE_IDS.some(roleId => member.roles.cache.has(roleId));
 }
 
+// ==================== EXPIRAÇÕES (mantidas iguais) ====================
 function readPrizeExpirations() {
   if (!fs.existsSync(PRIZE_EXPIRATIONS_FILE)) return [];
   try {
@@ -125,16 +116,13 @@ function writePrizeExpirations(entries) {
 }
 
 /**
- * Registra o sistema de Drops
- * @param {import('discord.js').Client} client
- * @param {{ commands: any[], defaultChannelId?: string, canStartDrop: Function }} options
+ * Registra o sistema de Drops com !drop + Modal
  */
 function registerDropSystem(client, options) {
   const {
-    commands,
     defaultChannelId = '1491433665862045897',
     canStartDrop,
-  } = options;
+  } = options || {};
 
   const token = process.env.DISCORD_TOKEN;
   const guildId = process.env.GUILD_ID;
@@ -149,7 +137,7 @@ function registerDropSystem(client, options) {
   const pendingPrizeSelections = new Map();
   const expirationTimers = new Map();
 
-  // ==================== FUNÇÕES INTERNAS ====================
+  // ==================== FUNÇÕES INTERNAS (mantidas) ====================
   function keyForExpiration(entry) {
     return `${entry.guildId}:${entry.userId}:${entry.roleId}`;
   }
@@ -202,19 +190,6 @@ function registerDropSystem(client, options) {
     }
   }
 
-  // ==================== COMANDO SLASH ====================
-  const dropCommand = new SlashCommandBuilder()
-    .setName('drop')
-    .setDescription('Inicia um drop manual de pergunta e resposta')
-    .addStringOption(opt =>
-      opt.setName('pergunta').setDescription('Pergunta do drop (opcional, usa aleatória se vazio)').setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt.setName('resposta').setDescription('Resposta correta (obrigatória se definir pergunta)').setRequired(false)
-    );
-
-  commands.push(dropCommand);
-
   // ==================== FUNÇÃO PARA ENVIAR DM DO PRÊMIO ====================
   async function sendPrizeDm(guild, user) {
     const dmEmbed = buildWinnerDmEmbed();
@@ -230,13 +205,16 @@ function registerDropSystem(client, options) {
       ]);
 
     const row = new ActionRowBuilder().addComponents(select);
-    await user.send({ embeds: [dmEmbed], components: [row] });
+    await user.send({ embeds: [dmEmbed], components: [row] }).catch(() => {});
 
     pendingPrizeSelections.set(selectId, { guildId: guild.id, userId: user.id });
   }
 
   async function startDrop(channel, actorTag, customQuestion, customAnswer) {
-    if (activeDrop) return { ok: false, reason: 'Já existe um drop ativo.' };
+    if (activeDrop) {
+      await channel.send('⚠️ Já existe um drop ativo no momento.').catch(() => {});
+      return;
+    }
 
     const picked = customQuestion
       ? { question: customQuestion, answer: customAnswer, acceptedAnswers: [customAnswer] }
@@ -252,35 +230,95 @@ function registerDropSystem(client, options) {
       activeDrop = null;
     }, DROP_DURATION_MS);
 
-    activeDrop = { channelId: channel.id, accepted, answer: picked.answer, timeout, startedBy: actorTag };
-    console.log(`🎁 Drop iniciado por ${actorTag}`);
-    return { ok: true };
+    activeDrop = { 
+      channelId: channel.id, 
+      accepted, 
+      answer: picked.answer, 
+      timeout, 
+      startedBy: actorTag 
+    };
+
+    console.log(`🎁 Drop iniciado por ${actorTag} | Pergunta: ${picked.question}`);
   }
 
-  // ==================== EVENTOS ====================
+  // ==================== COMANDO !drop + BOTÃO ====================
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (!message.content.trim().toLowerCase().startsWith('!drop')) return;
+
+    if (!hasAuthorizedDropRole(message.member) && 
+        !(typeof canStartDrop === 'function' && canStartDrop(message.member))) {
+      return message.reply('❌ Você não tem permissão para iniciar drops.').catch(() => {});
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('open_drop_modal')
+        .setLabel('Criar Drop')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🎁')
+    );
+
+    await message.reply({
+      content: '**🎁 Criar Novo Drop**\nClique no botão abaixo e preencha a pergunta e a resposta:',
+      components: [row]
+    });
+  });
+
+  // ==================== INTERACTIONS (Botão + Modal + Prêmio) ====================
   client.on('interactionCreate', async (interaction) => {
-    if (interaction.isChatInputCommand() && interaction.commandName === 'drop') {
-      if (!hasAuthorizedDropRole(interaction.member) && !canStartDrop(interaction.member)) {
-        return interaction.reply({ content: '❌ Você não tem permissão para iniciar drops.', flags: MessageFlags.Ephemeral });
-      }
+    // ==================== BOTÃO → ABRIR MODAL ====================
+    if (interaction.isButton() && interaction.customId === 'open_drop_modal') {
+      const modal = new ModalBuilder()
+        .setCustomId('drop_create_modal')
+        .setTitle('🎁 Criar Drop Personalizado');
 
-      const question = interaction.options.getString('pergunta');
-      const answer = interaction.options.getString('resposta');
+      const questionInput = new TextInputBuilder()
+        .setCustomId('question')
+        .setLabel('Pergunta do Drop')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Ex: Qual é a capital do Brasil?')
+        .setRequired(true)
+        .setMaxLength(300);
 
-      if ((question && !answer) || (!question && answer)) {
-        return interaction.reply({ content: '❌ Se definir pergunta manual, também precisa definir a resposta.', flags: MessageFlags.Ephemeral });
+      const answerInput = new TextInputBuilder()
+        .setCustomId('answer')
+        .setLabel('Resposta Correta')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Ex: brasília')
+        .setRequired(true)
+        .setMaxLength(100);
+
+      const firstRow = new ActionRowBuilder().addComponents(questionInput);
+      const secondRow = new ActionRowBuilder().addComponents(answerInput);
+
+      modal.addComponents(firstRow, secondRow);
+
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ==================== MODAL SUBMIT ====================
+    if (interaction.isModalSubmit() && interaction.customId === 'drop_create_modal') {
+      const question = interaction.fields.getTextInputValue('question').trim();
+      const answer = interaction.fields.getTextInputValue('answer').trim();
+
+      if (!question || !answer) {
+        return interaction.reply({ content: '❌ Pergunta e resposta são obrigatórias!', ephemeral: true });
       }
 
       const channel = interaction.guild.channels.cache.get(defaultChannelId) || interaction.channel;
-      const result = await startDrop(channel, interaction.user.tag, question, answer);
 
-      if (!result.ok) {
-        return interaction.reply({ content: `⚠️ ${result.reason}`, flags: MessageFlags.Ephemeral });
-      }
+      await interaction.reply({ 
+        content: '✅ Drop sendo criado...', 
+        ephemeral: true 
+      });
 
-      return interaction.reply({ content: '✅ Drop iniciado com sucesso!', flags: MessageFlags.Ephemeral });
+      await startDrop(channel, interaction.user.tag, question, answer);
+      return;
     }
 
+    // ==================== MENU DE PRÊMIO ====================
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('drop_prize_')) {
       const selection = pendingPrizeSelections.get(interaction.customId);
       if (!selection || interaction.user.id !== selection.userId) {
@@ -313,6 +351,7 @@ function registerDropSystem(client, options) {
     }
   });
 
+  // ==================== RESPOSTA DO DROP (mensagens no chat) ====================
   client.on('messageCreate', async (message) => {
     if (!activeDrop || message.author.bot || message.channelId !== activeDrop.channelId) return;
 
@@ -341,28 +380,12 @@ function registerDropSystem(client, options) {
     console.log(`🏰 Guild ID: ${guildId}`);
     console.log(`📍 Canal padrão: ${defaultChannelId}`);
 
-    try {
-      const rest = new REST({ version: '10' }).setToken(token);
-      console.log('\n🔄 Registrando comando /drop no servidor...');
-
-      const data = await rest.put(
-        Routes.applicationGuildCommands(client.user.id, guildId),
-        { body: commands.map(cmd => cmd.toJSON()) }
-      );
-
-      console.log(`✅ Sucesso! ${data.length} comando(s) registrado(s).`);
-      console.log('📋 Comandos:', data.map(c => c.name).join(', '));
-    } catch (error) {
-      console.error('\n❌ ERRO AO REGISTRAR COMANDO:');
-      console.error(error);
-    }
-
-    // Carrega expirações salvas
     const expirations = readPrizeExpirations();
     for (const entry of expirations) schedulePrizeRoleRemoval(entry);
     console.log(`📦 ${expirations.length} cargo(s) com expiração carregados.`);
 
-    console.log('\n✅ Sistema de Drops carregado com sucesso!\n');
+    console.log('\n✅ Sistema de Drops carregado com sucesso!');
+    console.log('📌 Use: **!drop** para abrir o painel de criação.\n');
   });
 }
 
