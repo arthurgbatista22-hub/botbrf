@@ -72,6 +72,9 @@ const ALLOWED_FRIENDLY_CHANNELS = [
 ];
 const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
 
+// Canal onde a mensagem automática de help aparece ao digitar
+const HELP_AUTO_CHANNEL = '1494336905104331014';
+
 // ═══════════════════════════════════════════════════════
 // 🚫 ANTI-INVITE
 // ═══════════════════════════════════════════════════════
@@ -165,16 +168,6 @@ const AUTO_RESPONSES = [
     ],
     response: '🔓 Para se **liberar de um time**, use o comando `/release` no canal <#1492354496259428392>!'
   },
-  {
-    keywords: [
-      'quais comandos', 'lista de comandos', 'que comandos tem', 'quais sao os comandos',
-      'que comandos existem', 'me manda os comandos', 'comandos do bot',
-      'help', 'ajuda', 'como usar o bot', 'como funciona o bot',
-      'o que o bot faz', 'que o bot faz', 'comandos disponiveis',
-      'comandos disponíveis', 'como usar os comandos',
-    ],
-    response: '📖 **Comandos disponíveis:**\n\n📢 `/fa` — Anunciar Free Agent → <#1491433748774912140>\n📋 `/contract` — Propor contrato → <#1491433748774912140>\n🔍 `/scouting` — Anunciar scouting → <#1491433748774912140>\n⚽ `/friendly` — Pedir friendly → <#1491433748774912140>\n🔓 `/release` — Sair do time → <#1492354496259428392>'
-  }
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -185,16 +178,54 @@ async function sendToChannel(guild, channelId, payload, threadName) {
   const channel = await guild.channels.fetch(channelId);
   if (!channel) return;
 
-  // Canal de fórum (type 15) — cria tópico
   if (channel.type === ChannelType.GuildForum) {
     await channel.threads.create({
       name: threadName,
       message: payload,
     });
   } else {
-    // Canal normal
     await channel.send(payload);
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// 📖 EMBED DE HELP
+// ═══════════════════════════════════════════════════════
+
+function buildHelpEmbed() {
+  return new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle('📖 Central de Comandos')
+    .setDescription('Veja todos os comandos disponíveis abaixo:')
+    .addFields(
+      {
+        name: '📋 /contract',
+        value: 'Envia proposta de contrato\n`Uso: /contract jogador time posicao`',
+        inline: false,
+      },
+      {
+        name: '🌍 /fa',
+        value: 'Se tornar Free Agent\n`Uso: /fa posicao plataforma experiencia`',
+        inline: false,
+      },
+      {
+        name: '🔓 /release',
+        value: 'Se liberar de um time\n`Uso: /release`',
+        inline: false,
+      },
+      {
+        name: '🤝 /friendly',
+        value: 'Criar pedido de amistoso\n`Uso: /friendly sobre`',
+        inline: false,
+      },
+      {
+        name: '🔍 /scouting',
+        value: 'Criar scouting de clube\n`Uso: /scouting time posicao sobre`',
+        inline: false,
+      },
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • Sistema Oficial' })
+    .setTimestamp();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -204,7 +235,7 @@ const activeContracts = new Map();
 const expirationTimers = new Map();
 
 // ═══════════════════════════════════════════════════════
-// 💾 PERSISTÊNCIA DE CONTRATOS (salvo em contratos.json)
+// 💾 PERSISTÊNCIA DE CONTRATOS
 // ═══════════════════════════════════════════════════════
 
 const CONTRACTS_FILE = './contratos.json';
@@ -253,7 +284,6 @@ function loadContracts() {
           try {
             const guild = client.guilds.cache.get(c.guildId);
             if (guild) {
-              // ✅ CORRIGIDO: Usa CONTRACT_ANNOUNCEMENT_CHANNEL em vez de c.channelId
               const channel = guild.channels.cache.get(CONTRACT_ANNOUNCEMENT_CHANNEL);
               const member = await guild.members.fetch(c.signee.id).catch(() => null);
               if (member && c.teamRoleId) {
@@ -345,7 +375,6 @@ async function scheduleContractExpiration(contractId, contractData) {
       try {
         const guild = client.guilds.cache.get(contract.guildId);
         if (guild) {
-          // ✅ CORRIGIDO: Usa CONTRACT_ANNOUNCEMENT_CHANNEL em vez de contract.channelId
           const channel = guild.channels.cache.get(CONTRACT_ANNOUNCEMENT_CHANNEL);
           const member = await guild.members.fetch(contract.signee.id).catch(() => null);
           if (member && contract.teamRoleId) {
@@ -425,6 +454,10 @@ const commands = [
     .setName('friendly')
     .setDescription('Anunciar um pedido de friendly')
     .addStringOption(opt => opt.setName('sobre').setDescription('Detalhes do friendly (horário, formato, etc)').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Ver todos os comandos disponíveis'),
 ];
 
 client.once('ready', async () => {
@@ -517,6 +550,24 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  // 📖 HELP AUTOMÁTICO NO CANAL ESPECÍFICO
+  if (message.channelId === HELP_AUTO_CHANNEL) {
+    const helpTriggers = ['help', 'ajuda', 'comandos', 'como usar', 'quais comandos'];
+    const isHelpMsg = helpTriggers.some(t => msgLower.includes(t));
+    if (isHelpMsg) {
+      try {
+        await message.delete().catch(() => {});
+        await message.channel.send({
+          content: `${message.author}`,
+          embeds: [buildHelpEmbed()],
+        }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+      } catch (err) {
+        console.error('Erro ao enviar help automático:', err);
+      }
+      return;
+    }
+  }
+
   // 🤖 RESPOSTAS AUTOMÁTICAS
   for (const entry of AUTO_RESPONSES) {
     const matched = entry.keywords.some(keyword => msgLower.includes(keyword));
@@ -535,6 +586,14 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand()) {
+
+    // /help
+    if (interaction.commandName === 'help') {
+      return interaction.reply({
+        embeds: [buildHelpEmbed()],
+        ephemeral: true,
+      });
+    }
 
     // /contract
     if (interaction.commandName === 'contract') {
