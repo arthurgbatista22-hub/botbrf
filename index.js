@@ -719,22 +719,30 @@ client.on('interactionCreate', async (interaction) => {
         ephemeral: true
       });
 
+      // 📨 ENVIAR DM PARA O JOGADOR
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0x5865f2)
-          .setTitle('📋 Você recebeu um Contract!')
-          .setDescription(`Você recebeu uma proposta de contrato do time **${teamRole.name}** na liga **The Classic Soccer Federation**.\n\nAcesse o servidor para aceitar ou rejeitar.`)
+          .setTitle('📋 Contract Recebido!')
+          .setDescription(`Você recebeu um **offer de contract** na liga **The Classic Soccer Federation**!`)
           .addFields(
-            { name: 'Time', value: teamRole.name, inline: true },
-            { name: 'Posição', value: position, inline: true },
-            { name: 'Enviado por', value: contractor.username, inline: true },
+            { name: '🏟️ Time', value: teamRole.name, inline: true },
+            { name: '⚽ Posição', value: position, inline: true },
+            { name: '👤 Enviado por', value: contractor.username, inline: false },
+            { 
+              name: '📍 Ação Necessária', 
+              value: `Confira os detalhes e aceite ou rejeite o contrato no canal:\n\n🔗 [Ir para o Canal de Contratos](https://discord.com/channels/1491080801662533878/1491447652422914220)`, 
+              inline: false 
+            }
           )
-          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
+          .setFooter({ text: 'The Classic Soccer Federation • Responda o mais rápido possível!' })
           .setTimestamp();
 
         await signee.send({ embeds: [dmEmbed] });
+        console.log(`✅ DM de contrato enviada para ${signee.username}`);
       } catch (err) {
-        console.log(`⚠️ Não foi possível enviar DM para ${signee.username}: DMs fechadas.`);
+        console.log(`⚠️ Não foi possível enviar DM para ${signee.username}: ${err.message}`);
       }
     }
 
