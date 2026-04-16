@@ -253,7 +253,8 @@ function loadContracts() {
           try {
             const guild = client.guilds.cache.get(c.guildId);
             if (guild) {
-              const channel = guild.channels.cache.get(c.channelId);
+              // ✅ CORRIGIDO: Usa CONTRACT_ANNOUNCEMENT_CHANNEL em vez de c.channelId
+              const channel = guild.channels.cache.get(CONTRACT_ANNOUNCEMENT_CHANNEL);
               const member = await guild.members.fetch(c.signee.id).catch(() => null);
               if (member && c.teamRoleId) {
                 await member.roles.remove(c.teamRoleId).catch(() => {});
@@ -273,7 +274,10 @@ function loadContracts() {
                   )
                   .setFooter({ text: 'The Classic Soccer Federation' })
                   .setTimestamp();
-                await channel.send({ embeds: [expirationEmbed] });
+                await channel.send({
+                  content: `⚠️ <@${c.contractor.id}> <@${c.signee.id}>`,
+                  embeds: [expirationEmbed]
+                });
               }
             }
           } catch (err) {
@@ -341,12 +345,16 @@ async function scheduleContractExpiration(contractId, contractData) {
       try {
         const guild = client.guilds.cache.get(contract.guildId);
         if (guild) {
-          const channel = guild.channels.cache.get(contract.channelId);
+          // ✅ CORRIGIDO: Usa CONTRACT_ANNOUNCEMENT_CHANNEL em vez de contract.channelId
+          const channel = guild.channels.cache.get(CONTRACT_ANNOUNCEMENT_CHANNEL);
           const member = await guild.members.fetch(contract.signee.id).catch(() => null);
           if (member && contract.teamRoleId) {
             await member.roles.remove(contract.teamRoleId).catch(err =>
               console.error('Erro ao remover cargo:', err)
             );
+          }
+          if (member) {
+            await member.roles.add('1492562238761074870').catch(() => {});
           }
           if (channel) {
             const expirationEmbed = new EmbedBuilder()
