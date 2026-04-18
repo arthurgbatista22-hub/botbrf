@@ -8,6 +8,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions,
   ]
 });
 
@@ -45,6 +46,85 @@ const ALLOWED_TEAM_ROLE_NAMES = [];
 const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 
 // ═══════════════════════════════════════════════════════
+// 🎭 REACTION ROLES
+// ═══════════════════════════════════════════════════════
+
+// ID do canal onde a mensagem de reaction roles será enviada
+// Altere para o canal correto do seu servidor
+const REACTION_ROLES_CHANNEL = '1491438344130007332';
+
+// Mapeamento emoji → cargo
+const REACTION_ROLES = [
+  { emoji: '⚙️', roleId: '1492348332700471458', label: 'Scrim Ping',  description: 'Quer ser notificado quando estiver tendo scrim?' },
+  { emoji: '🎉', roleId: '1492348735437668472', label: 'Fun Ping',    description: 'Quer ser notificado sobre eventos e diversão?' },
+  { emoji: '⚽', roleId: '1492348557812961422', label: 'Match Ping',  description: 'Quer ser notificado quando estiver acontecendo uma partida?' },
+  { emoji: '📸', roleId: '1492348457015578736', label: 'Media Ping',  description: 'Quer ter acesso a toda categoria de media?' },
+];
+
+// Arquivo para persistir o ID da mensagem de reaction roles
+const REACTION_MSG_FILE = './reaction_message.json';
+
+let reactionMessageId = null;
+
+function saveReactionMessageId(id) {
+  fs.writeFileSync(REACTION_MSG_FILE, JSON.stringify({ messageId: id }));
+}
+
+function loadReactionMessageId() {
+  if (!fs.existsSync(REACTION_MSG_FILE)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(REACTION_MSG_FILE, 'utf8'));
+    return data.messageId || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildReactionRolesEmbed() {
+  const lines = REACTION_ROLES.map(r => `${r.emoji} - ${r.description}`).join('\n');
+  return new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle('🎭 Cargos por Reação')
+    .setDescription(`Você que está no comando de quando você será mencionado\n\n${lines}`)
+    .setFooter({ text: 'The Classic Soccer Federation • Reaja abaixo para receber/remover um cargo' })
+    .setTimestamp();
+}
+
+async function setupReactionRolesMessage(guild) {
+  const channel = await guild.channels.fetch(REACTION_ROLES_CHANNEL).catch(() => null);
+  if (!channel) {
+    console.error('❌ Canal de reaction roles não encontrado!');
+    return;
+  }
+
+  // Se já existe uma mensagem salva, verifica se ainda está lá
+  if (reactionMessageId) {
+    try {
+      const existing = await channel.messages.fetch(reactionMessageId);
+      if (existing) {
+        console.log('✅ Mensagem de reaction roles já existe, reutilizando.');
+        return;
+      }
+    } catch {
+      console.log('⚠️ Mensagem de reaction roles não encontrada, criando nova...');
+    }
+  }
+
+  // Cria nova mensagem
+  const msg = await channel.send({
+    embeds: [buildReactionRolesEmbed()],
+  });
+
+  for (const r of REACTION_ROLES) {
+    await msg.react(r.emoji);
+  }
+
+  reactionMessageId = msg.id;
+  saveReactionMessageId(msg.id);
+  console.log(`✅ Mensagem de reaction roles criada: ${msg.id}`);
+}
+
+// ═══════════════════════════════════════════════════════
 // 📍 CANAIS PERMITIDOS PARA COMANDOS
 // ═══════════════════════════════════════════════════════
 
@@ -72,7 +152,6 @@ const ALLOWED_FRIENDLY_CHANNELS = [
 ];
 const FRIENDLY_ANNOUNCEMENT_CHANNEL = '1492659295819403385';
 
-// Canal onde a mensagem automática de help aparece ao digitar
 const HELP_AUTO_CHANNEL = '1494336905104331014';
 
 // ═══════════════════════════════════════════════════════
@@ -458,12 +537,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Ver todos os comandos disponíveis'),
+
+  new SlashCommandBuilder()
+    .setName('setup_reaction_roles')
+    .setDescription('(Admin) Envia a mensagem de cargos por reação')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ];
 
 client.once('ready', async () => {
   console.log(`✅ Bot online como: ${client.user.tag}`);
 
   loadContracts();
+
+  // Carrega o ID da mensagem de reaction roles salva
+  reactionMessageId = loadReactionMessageId();
 
   client.user.setPresence({
     activities: [{ name: 'The Classic Soccer Federation', type: 0 }],
@@ -479,6 +566,81 @@ client.once('ready', async () => {
     console.log('✅ Slash commands registrados!');
   } catch (err) {
     console.error('Erro ao registrar commands:', err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// 🎭 REACTION ROLES — Adicionar cargo ao reagir
+// ═══════════════════════════════════════════════════════
+
+client.on('messageReactionAdd', async (reaction, user) => {
+  if (user.bot) return;
+  if (reaction.message.id !== reactionMessageId) return;
+
+  // Busca parcial (caso o bot reiniciou)
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch { return; }
+  }
+
+  const emojiName = reaction.emoji.name;
+  const roleConfig = REACTION_ROLES.find(r => r.emoji === emojiName);
+  if (!roleConfig) return;
+
+  try {
+    const guild = reaction.message.guild;
+    const member = await guild.members.fetch(user.id);
+    await member.roles.add(roleConfig.roleId);
+    console.log(`✅ Cargo "${roleConfig.label}" adicionado a ${user.tag}`);
+
+    await user.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x57f287)
+          .setTitle('✅ Cargo Recebido!')
+          .setDescription(`Você recebeu o cargo **${roleConfig.label}** no servidor **The Classic Soccer Federation**!\n\nPara remover, é só tirar a reação.`)
+          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setTimestamp()
+      ]
+    }).catch(() => {});
+  } catch (err) {
+    console.error('Erro ao adicionar cargo por reação:', err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// 🎭 REACTION ROLES — Remover cargo ao tirar reação
+// ═══════════════════════════════════════════════════════
+
+client.on('messageReactionRemove', async (reaction, user) => {
+  if (user.bot) return;
+  if (reaction.message.id !== reactionMessageId) return;
+
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch { return; }
+  }
+
+  const emojiName = reaction.emoji.name;
+  const roleConfig = REACTION_ROLES.find(r => r.emoji === emojiName);
+  if (!roleConfig) return;
+
+  try {
+    const guild = reaction.message.guild;
+    const member = await guild.members.fetch(user.id);
+    await member.roles.remove(roleConfig.roleId);
+    console.log(`🗑️ Cargo "${roleConfig.label}" removido de ${user.tag}`);
+
+    await user.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('🗑️ Cargo Removido')
+          .setDescription(`O cargo **${roleConfig.label}** foi removido do servidor **The Classic Soccer Federation**.\n\nPara receber novamente, reaja à mensagem de cargos.`)
+          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setTimestamp()
+      ]
+    }).catch(() => {});
+  } catch (err) {
+    console.error('Erro ao remover cargo por reação:', err);
   }
 });
 
@@ -593,6 +755,19 @@ client.on('interactionCreate', async (interaction) => {
         embeds: [buildHelpEmbed()],
         ephemeral: true,
       });
+    }
+
+    // /setup_reaction_roles
+    if (interaction.commandName === 'setup_reaction_roles') {
+      await interaction.deferReply({ ephemeral: true });
+      try {
+        await setupReactionRolesMessage(interaction.guild);
+        await interaction.editReply({ content: '✅ Mensagem de reaction roles enviada com sucesso!' });
+      } catch (err) {
+        console.error('Erro no setup_reaction_roles:', err);
+        await interaction.editReply({ content: '❌ Erro ao enviar mensagem de reaction roles. Verifique o canal configurado.' });
+      }
+      return;
     }
 
     // /contract
@@ -719,7 +894,6 @@ client.on('interactionCreate', async (interaction) => {
         ephemeral: true
       });
 
-      // 📨 ENVIAR DM PARA O JOGADOR
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0x5865f2)
