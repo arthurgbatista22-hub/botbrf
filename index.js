@@ -51,7 +51,7 @@ const CONTRACT_EXPIRATION_TIME = 24 * 60 * 60 * 1000;
 
 // ID do canal onde a mensagem de reaction roles será enviada
 // Altere para o canal correto do seu servidor
-const REACTION_ROLES_CHANNEL = '1491438344130007332';
+const REACTION_ROLES_CHANNEL = '1492347556053778432';
 
 // Mapeamento emoji → cargo
 const REACTION_ROLES = [
