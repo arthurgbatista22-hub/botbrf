@@ -906,15 +906,38 @@ client.on('interactionCreate', async (interaction) => {
       const contractor = interaction.user;
 
       const existingContract = [...activeContracts.values()].find(c => c.signee.id === signee.id);
-      if (existingContract) {
-        const errorEmbed = new EmbedBuilder()
-          .setColor(0xed4245)
-          .setTitle('❌ Contrato Já Existente')
-          .setDescription(`${signee} já possui um contrato ativo com **${existingContract.teamName}**.`)
-          .setFooter({ text: 'The Classic Soccer Federation' })
-          .setTimestamp();
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-      }
+if (existingContract) {
+  const errorEmbed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('❌ Contrato Já Existente')
+    .setDescription(`${signee} já possui um contrato ativo com **${existingContract.teamName}**.`)
+    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setTimestamp();
+  return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+}
+
+// Verifica se o jogador já possui cargo de algum time
+const signeeGuildMember = await interaction.guild.members.fetch(signee.id).catch(() => null);
+const signeeHasTeamRole = signeeGuildMember &&
+  ALLOWED_TEAM_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
+
+if (signeeHasTeamRole) {
+  const teamRoleOfSignee = ALLOWED_TEAM_ROLES
+    .map(id => interaction.guild.roles.cache.get(id))
+    .find(role => role && signeeGuildMember.roles.cache.has(role.id));
+
+  const errorEmbed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('⛔ Jogador Já em um Time')
+    .setDescription(`${signee} já faz parte de um time e não pode receber um contrato no momento.`)
+    .addFields(
+      { name: 'Jogador', value: `${signee}`, inline: true },
+      { name: 'Time Atual', value: teamRoleOfSignee ? teamRoleOfSignee.name : 'Desconhecido', inline: true },
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • O jogador deve usar /release primeiro' })
+    .setTimestamp();
+  return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+}
 
       if (!isRoleAllowed(teamRole)) {
         const errorEmbed = new EmbedBuilder()
