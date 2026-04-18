@@ -64,7 +64,109 @@ const REACTION_ROLES = [
 // Arquivo para persistir o ID da mensagem de reaction roles
 const REACTION_MSG_FILE = './reaction_message.json';
 
+// ═══════════════════════════════════════════════════════
+// 🔔 SISTEMA DE PING @HERE A CADA 2 DIAS
+// ═══════════════════════════════════════════════════════
+
+const PING_INTERVAL_FILE = './last_ping.json';
+const PING_INTERVAL = 2 * 24 * 60 * 60 * 1000; // 2 dias em milissegundos
+
 let reactionMessageId = null;
+let pingIntervalTimer = null;
+
+function saveLastPingTime() {
+  fs.writeFileSync(PING_INTERVAL_FILE, JSON.stringify({ lastPing: Date.now() }));
+}
+
+function loadLastPingTime() {
+  if (!fs.existsSync(PING_INTERVAL_FILE)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(PING_INTERVAL_FILE, 'utf8'));
+    return data.lastPing || null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendHerePing(guild) {
+  const channel = await guild.channels.fetch(REACTION_ROLES_CHANNEL).catch(() => null);
+  if (!channel) {
+    console.error('❌ Canal de reaction roles não encontrado para ping!');
+    return;
+  }
+
+  const pingEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('🔔 Lembrete de Cargos por Reação')
+    .setDescription(
+      `Não se esqueça de reagir na mensagem de cargos para personalizar suas notificações!\n\n` +
+      `Escolha os cargos que você quer receber:\n` +
+      REACTION_ROLES.map(r => `${r.emoji} **${r.label}** - ${r.description}`).join('\n')
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • Reaja na mensagem fixada acima!' })
+    .setTimestamp();
+
+  try {
+    const sentMessage = await channel.send({
+      content: '@here',
+      embeds: [pingEmbed]
+    });
+    console.log('✅ Ping @here enviado no canal de reaction roles');
+    saveLastPingTime();
+
+    // Sistema de apagar a mensagem para não lotar o canal (apaga após 1 minuto)
+    setTimeout(async () => {
+      try {
+        await sentMessage.delete();
+        console.log('🗑️ Mensagem de ping @here apagada automaticamente.');
+      } catch (err) {
+        console.error('❌ Erro ao apagar mensagem de ping:', err);
+      }
+    }, 60000); // 60000ms = 1 minuto
+
+  } catch (err) {
+    console.error('❌ Erro ao enviar ping @here:', err);
+  }
+}
+
+function schedulePingInterval(guild) {
+  const lastPing = loadLastPingTime();
+  const now = Date.now();
+  
+  let nextPingDelay;
+  
+  if (lastPing) {
+    const timeSinceLastPing = now - lastPing;
+    if (timeSinceLastPing >= PING_INTERVAL) {
+      // Se já passou o tempo, envia imediatamente
+      sendHerePing(guild);
+      nextPingDelay = PING_INTERVAL;
+    } else {
+      // Calcula quanto tempo falta
+      nextPingDelay = PING_INTERVAL - timeSinceLastPing;
+    }
+  } else {
+    // Primeira vez, aguarda 2 dias
+    nextPingDelay = PING_INTERVAL;
+  }
+
+  console.log(`🔔 Próximo ping @here em: ${Math.round(nextPingDelay / 1000 / 60 / 60)} horas`);
+
+  // Limpa timer anterior se existir
+  if (pingIntervalTimer) {
+    clearInterval(pingIntervalTimer);
+  }
+
+  // Envia o primeiro ping após o delay calculado
+  setTimeout(() => {
+    sendHerePing(guild);
+    
+    // Depois configura o intervalo de 2 em 2 dias
+    pingIntervalTimer = setInterval(() => {
+      sendHerePing(guild);
+    }, PING_INTERVAL);
+  }, nextPingDelay);
+}
 
 function saveReactionMessageId(id) {
   fs.writeFileSync(REACTION_MSG_FILE, JSON.stringify({ messageId: id }));
@@ -551,6 +653,12 @@ client.once('ready', async () => {
 
   // Carrega o ID da mensagem de reaction roles salva
   reactionMessageId = loadReactionMessageId();
+
+  // 🔔 Inicia o sistema de ping @here a cada 2 dias
+  const guild = client.guilds.cache.first();
+  if (guild) {
+    schedulePingInterval(guild);
+  }
 
   client.user.setPresence({
     activities: [{ name: 'The Classic Soccer Federation', type: 0 }],
