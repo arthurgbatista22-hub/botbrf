@@ -646,6 +646,22 @@ const commands = [
     .setName('setup_reaction_roles')
     .setDescription('(Admin) Envia a mensagem de cargos por reação')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+
+  .setName('announce')
+  .setDescription('Faz um anúncio em formato embed em um canal específico (Apenas Administradores)')
+  .setDefaultMemberPermissions(null)
+  .addChannelOption(opt =>
+    opt.setName('canal')
+      .setDescription('Canal onde o anúncio será enviado')
+      .setRequired(true)
+  )
+  .addStringOption(opt =>
+    opt.setName('mensagem')
+      .setDescription('Mensagem do anúncio')
+      .setRequired(true)
+  ),
 ];
 
 client.once('ready', async () => {
@@ -1055,6 +1071,60 @@ if (signeeHasTeamRole) {
         console.log(`⚠️ Não foi possível enviar DM para ${signee.username}: ${err.message}`);
       }
     }
+
+    // /announce
+else if (interaction.commandName === 'announce') {
+  const ALLOWED_ANNOUNCE_ROLES = [
+    '1491438719201181717',
+    '1491439004149747842',
+    '1491438424685805608',
+    '1491438613379153990',
+    '1491437519760261178',
+    '1491437072547057805',
+    '1491436528725917888',
+    '1491436756678217819',
+    '1491081676158275615',
+    '1492378748610412575',
+    '1495428206264713308',
+  ];
+
+  const hasAnnouncePermission = ALLOWED_ANNOUNCE_ROLES.some(id => interaction.member.roles.cache.has(id));
+
+  if (!hasAnnouncePermission) {
+    return interaction.reply({
+      content: '❌ Você não tem permissão para usar este comando.',
+      ephemeral: true
+    });
+  }
+  const canal = interaction.options.getChannel('canal');
+  const mensagem = interaction.options.getString('mensagem');
+
+  const announceEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('📢 Anúncio')
+    .setDescription(mensagem)
+    .setAuthor({
+      name: interaction.user.username,
+      iconURL: interaction.user.displayAvatarURL({ dynamic: true })
+    })
+    .setFooter({ text: 'The Classic Soccer Federation' })
+    .setTimestamp();
+
+  try {
+    await canal.send({ embeds: [announceEmbed] });
+    await interaction.reply({
+      content: `✅ Anúncio enviado com sucesso em ${canal}!`,
+      ephemeral: true
+    });
+    console.log(`📢 Anúncio enviado por ${interaction.user.tag} no canal #${canal.name}`);
+  } catch (err) {
+    console.error('❌ Erro ao enviar anúncio:', err);
+    await interaction.reply({
+      content: '❌ Não foi possível enviar o anúncio. Verifique se o bot tem permissão nesse canal.',
+      ephemeral: true
+    });
+  }
+}
 
     // /contratos_ativos
     else if (interaction.commandName === 'contratos_ativos') {
