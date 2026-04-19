@@ -1102,7 +1102,7 @@ else if (interaction.commandName === 'announce') {
     });
   }
   const canal = interaction.options.getChannel('canal');
-  const mensagem = interaction.options.getString('mensagem');
+  const mensagem = interaction.options.getString('mensagem').replace(/\\n/g, '\n');
   const titulo = interaction.options.getString('titulo');
 
   const announceEmbed = new EmbedBuilder()
