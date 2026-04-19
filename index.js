@@ -431,6 +431,7 @@ function saveContracts() {
       teamName: c.teamName,
       teamRoleId: c.teamRoleId,
       position: c.position,
+      role: c.role,
       proposedAt: c.proposedAt,
       signedAt: c.signedAt,
       expiresAt: c.expiresAt,
@@ -601,7 +602,8 @@ const commands = [
     .setDescription('Propor um contrato para um jogador')
     .addUserOption(opt => opt.setName('jogador').setDescription('O jogador que vai assinar').setRequired(true))
     .addRoleOption(opt => opt.setName('time').setDescription('Cargo do time').setRequired(true))
-    .addStringOption(opt => opt.setName('posicao').setDescription('Posição do jogador (ex: cb, st, gk)').setRequired(true)),
+    .addStringOption(opt => opt.setName('posicao').setDescription('Posição do jogador (ex: cb, st, gk)').setRequired(true))
+    .addStringOption(opt => opt.setName('role').setDescription('Role do jogador (ex: Titular, Subs)').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('contratos_ativos')
@@ -903,6 +905,7 @@ client.on('interactionCreate', async (interaction) => {
       const signee = interaction.options.getUser('jogador');
       const teamRole = interaction.options.getRole('time');
       const position = interaction.options.getString('posicao');
+      const role = interaction.options.getString('role');
       const contractor = interaction.user;
 
       const existingContract = [...activeContracts.values()].find(c => c.signee.id === signee.id);
@@ -972,6 +975,7 @@ if (signeeHasTeamRole) {
         teamName: teamRole.name,
         teamRoleId: teamRole.id,
         position,
+        role,
         proposedAt: new Date(),
         channelId: interaction.channelId,
         guildId: interaction.guildId,
@@ -990,6 +994,7 @@ if (signeeHasTeamRole) {
           { name: 'Contractor', value: `${contractor}\n${contractor.username}`, inline: true },
           { name: 'Team', value: teamRole.name, inline: true },
           { name: 'Position', value: position, inline: true },
+          { name: 'Role', value: role, inline: true },
         )
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
@@ -1420,6 +1425,7 @@ if (signeeHasTeamRole) {
           { name: 'Contractor', value: `${contractData.contractor}\n${contractData.contractor.username}`, inline: true },
           { name: 'Team', value: contractData.teamName, inline: true },
           { name: 'Position', value: contractData.position, inline: true },
+          { name: 'Role', value: contractData.role, inline: true },
           { name: 'Signed on', value: formatDate(now), inline: false },
         )
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
