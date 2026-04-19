@@ -661,6 +661,11 @@ const commands = [
     opt.setName('mensagem')
       .setDescription('Mensagem do anúncio')
       .setRequired(true)
+  )
+  .addStringOption(opt =>
+    opt.setName('titulo')
+      .setDescription('Título do anúncio (opcional)')
+      .setRequired(false)
   ),
 ];
 
@@ -1098,11 +1103,11 @@ else if (interaction.commandName === 'announce') {
   }
   const canal = interaction.options.getChannel('canal');
   const mensagem = interaction.options.getString('mensagem');
+  const titulo = interaction.options.getString('titulo');
 
   const announceEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle('📢 Anúncio')
-    .setDescription(mensagem)
+    .setDescription(titulo ? `# ${titulo}\n\n${mensagem}` : mensagem)
     .setAuthor({
       name: interaction.user.username,
       iconURL: interaction.user.displayAvatarURL({ dynamic: true })
