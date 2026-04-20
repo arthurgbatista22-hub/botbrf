@@ -976,33 +976,12 @@ if (existingContract) {
 // Verifica se o jogador já possui cargo de algum time
 // Verifica se o jogador já possui cargo de algum time
 const signeeGuildMember = await interaction.guild.members.fetch(signee.id).catch(() => null);
-const signeeHasTeamRole = signeeGuildMember &&
-  ALLOWED_TEAM_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
 
-if (signeeHasTeamRole) {
-  const teamRoleOfSignee = ALLOWED_TEAM_ROLES
-    .map(id => interaction.guild.roles.cache.get(id))
-    .find(role => role && signeeGuildMember.roles.cache.has(role.id));
-
-  const errorEmbed = new EmbedBuilder()
-    .setColor(0xed4245)
-    .setTitle('⛔ Jogador Já em um Time')
-    .setDescription(`${signee} já faz parte de um time e não pode receber um contrato no momento.`)
-    .addFields(
-      { name: 'Jogador', value: `${signee}`, inline: true },
-      { name: 'Time Atual', value: teamRoleOfSignee ? teamRoleOfSignee.name : 'Desconhecido', inline: true },
-    )
-    .setFooter({ text: 'The Classic Soccer Federation • O jogador deve usar /release primeiro' })
-    .setTimestamp();
-  return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-}
-
-// ── VERIFICAÇÃO DE CARGOS INTERNACIONAIS ──────────────────────────────────────
+// ── VERIFICAÇÃO DE CARGOS INTERNACIONAIS (vem primeiro) ──────────────────────
 const contractorMember = interaction.member;
 const contractorInternationalRoleId = INTERNATIONAL_ROLES.find(id => contractorMember.roles.cache.has(id));
 
 if (contractorInternationalRoleId) {
-  // Contratante TEM cargo internacional → signee precisa ter o MESMO cargo
   const signeeHasSameInternational = signeeGuildMember &&
     signeeGuildMember.roles.cache.has(contractorInternationalRoleId);
 
@@ -1023,7 +1002,6 @@ if (contractorInternationalRoleId) {
     return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
   }
 } else {
-  // Contratante NÃO tem cargo internacional → bloqueia se o signee tiver QUALQUER cargo internacional
   const signeeInternationalRoleId = signeeGuildMember &&
     INTERNATIONAL_ROLES.find(id => signeeGuildMember.roles.cache.has(id));
 
@@ -1043,6 +1021,29 @@ if (contractorInternationalRoleId) {
       .setTimestamp();
     return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
   }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Verifica se o jogador já possui cargo de algum time (vem depois)
+const signeeHasTeamRole = signeeGuildMember &&
+  ALLOWED_TEAM_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
+
+if (signeeHasTeamRole) {
+  const teamRoleOfSignee = ALLOWED_TEAM_ROLES
+    .map(id => interaction.guild.roles.cache.get(id))
+    .find(role => role && signeeGuildMember.roles.cache.has(role.id));
+
+  const errorEmbed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle('⛔ Jogador Já em um Time')
+    .setDescription(`${signee} já faz parte de um time e não pode receber um contrato no momento.`)
+    .addFields(
+      { name: 'Jogador', value: `${signee}`, inline: true },
+      { name: 'Time Atual', value: teamRoleOfSignee ? teamRoleOfSignee.name : 'Desconhecido', inline: true },
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • O jogador deve usar /release primeiro' })
+    .setTimestamp();
+  return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
