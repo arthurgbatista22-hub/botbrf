@@ -21,6 +21,34 @@ const ALLOWED_COMMAND_ROLES = [
   '1491448375881498665' // 👈 novo cargo que você quer liberar
 ];
 
+const INTERNATIONAL_ROLES = [
+  '1495837043241127936',
+  '1495839806125637793',
+  '1495839939211034745',
+  '1495840082202984600',
+  '1495842308212396147',
+  '1495845204257800202',
+  '1495843776646615151',
+  '1495844968688783541',
+  '1495844804762800209',
+  '1495845313208909885',
+  '1495845124897505400',
+  '1495845257362018325',
+  '1495845838948274377',
+  '1495846561979170917',
+  '1495845493110997194',
+  '1495847790415450252',
+  '1495849573770592399',
+  '1495845878433583115',
+  '1495846108683964427',
+  '1495880676296232981',
+  '1495845533300949253',
+  '1495845726092267561',
+  '1495846858218672128',
+  '1495845161991672038',
+  '1495844849482465290'
+];
+
 const ALLOWED_TEAM_ROLES = [
   '1491626081680232488',
   '1491626182276284466',
@@ -41,33 +69,7 @@ const ALLOWED_TEAM_ROLES = [
   '1491935127234805958',
   '1491935298840559807',
   '1491935469372702810',
-  '1491935723673092237',
-
-// International
-  '1495837043241127936',
-  '1495839806125637793',
-  '1495839939211034745',
-  '1495840082202984600',
-  '1495842308212396147',
-  '1495845204257800202',
-  '1495843776646615151',
-  '1495844968688783541',
-  '1495844804762800209',
-  '1495845313208909885',
-  '1495845124897505400',
-  '1495845257362018325',
-  '1495845838948274377',
-  '1495846561979170917',
-  '1495845493110997194',
-  '1495847790415450252',
-  '1495849573770592399',
-  '1495845878433583115',
-  '1495846108683964427',
-  '1495845533300949253',
-  '1495845726092267561',
-  '1495846858218672128',
-  '1495845161991672038',
-  '1495844849482465290'
+  '1491935723673092237'
 ];
 
 const ALLOWED_TEAM_ROLE_NAMES = [];
@@ -972,6 +974,7 @@ if (existingContract) {
 }
 
 // Verifica se o jogador já possui cargo de algum time
+// Verifica se o jogador já possui cargo de algum time
 const signeeGuildMember = await interaction.guild.members.fetch(signee.id).catch(() => null);
 const signeeHasTeamRole = signeeGuildMember &&
   ALLOWED_TEAM_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
@@ -993,6 +996,55 @@ if (signeeHasTeamRole) {
     .setTimestamp();
   return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
 }
+
+// ── VERIFICAÇÃO DE CARGOS INTERNACIONAIS ──────────────────────────────────────
+const contractorMember = interaction.member;
+const contractorInternationalRoleId = INTERNATIONAL_ROLES.find(id => contractorMember.roles.cache.has(id));
+
+if (contractorInternationalRoleId) {
+  // Contratante TEM cargo internacional → signee precisa ter o MESMO cargo
+  const signeeHasSameInternational = signeeGuildMember &&
+    signeeGuildMember.roles.cache.has(contractorInternationalRoleId);
+
+  if (!signeeHasSameInternational) {
+    const contractorIntlRole = interaction.guild.roles.cache.get(contractorInternationalRoleId);
+    const errorEmbed = new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle('🌍 Restrição Internacional')
+      .setDescription(
+        `Você possui o cargo internacional **${contractorIntlRole?.name ?? contractorInternationalRoleId}** e só pode contratar jogadores que também possuam **o mesmo cargo internacional**.`
+      )
+      .addFields(
+        { name: 'Jogador', value: `${signee}`, inline: true },
+        { name: 'Cargo Necessário', value: contractorIntlRole?.name ?? contractorInternationalRoleId, inline: true },
+      )
+      .setFooter({ text: 'The Classic Soccer Federation • Apenas jogadores da mesma nação podem ser contratados' })
+      .setTimestamp();
+    return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+  }
+} else {
+  // Contratante NÃO tem cargo internacional → bloqueia se o signee tiver QUALQUER cargo internacional
+  const signeeInternationalRoleId = signeeGuildMember &&
+    INTERNATIONAL_ROLES.find(id => signeeGuildMember.roles.cache.has(id));
+
+  if (signeeInternationalRoleId) {
+    const signeeIntlRole = interaction.guild.roles.cache.get(signeeInternationalRoleId);
+    const errorEmbed = new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle('🌍 Restrição Internacional')
+      .setDescription(
+        `${signee} possui o cargo internacional **${signeeIntlRole?.name ?? signeeInternationalRoleId}** e não pode ser contratado por alguém sem um cargo internacional correspondente.`
+      )
+      .addFields(
+        { name: 'Jogador', value: `${signee}`, inline: true },
+        { name: 'Cargo Internacional do Jogador', value: signeeIntlRole?.name ?? signeeInternationalRoleId, inline: true },
+      )
+      .setFooter({ text: 'The Classic Soccer Federation • Apenas contratantes com o mesmo cargo internacional podem contratar este jogador' })
+      .setTimestamp();
+    return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
       if (!isRoleAllowed(teamRole)) {
         const errorEmbed = new EmbedBuilder()
