@@ -16,7 +16,10 @@ const client = new Client({
 // ⚙️ CONFIGURAÇÃO DE PERMISSÕES E CARGOS
 // ═══════════════════════════════════════════════════════
 
-const ALLOWED_COMMAND_ROLE = '1491439508309278831';
+const ALLOWED_COMMAND_ROLES = [
+  '1491439508309278831',
+  '1491448375881498665' // 👈 novo cargo que você quer liberar
+];
 
 const ALLOWED_TEAM_ROLES = [
   '1491626081680232488',
@@ -552,7 +555,9 @@ function formatDate(date) {
 }
 
 function hasCommandPermission(member) {
-  return member.roles.cache.has(ALLOWED_COMMAND_ROLE);
+  return ALLOWED_COMMAND_ROLES.some(roleId => 
+    member.roles.cache.has(roleId)
+  );
 }
 
 function isContractChannelAllowed(channelId) {
