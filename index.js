@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder } = require('discord.js');
 require('dotenv').config();
 
 const client = new Client({
@@ -723,7 +723,7 @@ client.on('messageCreate', async (message) => {
   }
 
   if (DIVULGACAO_REGEX.test(msgLower)) {
-    const temPermissao = message.member && message.member.roles.cache.has(ALLOWED_COMMAND_ROLE);
+    const temPermissao = message.member && ALLOWED_COMMAND_ROLES.some(id => message.member.roles.cache.has(id));
     if (!temPermissao) {
       try {
         await message.delete();
@@ -835,42 +835,27 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      // ═══════════════════════════════════════════════════
-      // 🔍 VERIFICAÇÃO DE CARGO POR GRUPO (TIME vs INTERNACIONAL)
-      // Um jogador pode ter 1 cargo de ALLOWED_TEAM_ROLES + 1 de INTERNATIONAL_ROLES
-      // Mas não pode ter 2 do mesmo grupo.
-      // ═══════════════════════════════════════════════════
       const signeeGuildMember = await interaction.guild.members.fetch(signee.id).catch(() => null);
 
       const isTeamContract = ALLOWED_TEAM_ROLES.includes(teamRole.id);
       const isInternationalContract = INTERNATIONAL_ROLES.includes(teamRole.id);
 
+      // ═══════════════════════════════════════════════════
+      // 🚫 BLOQUEIO DE CONTRATOS PARA CLUBES (ALLOWED_TEAM_ROLES)
+      // Apenas seleções (INTERNATIONAL_ROLES) podem contratar no momento.
+      // ═══════════════════════════════════════════════════
       if (isTeamContract) {
-        // Verifica se já tem cargo de time nacional
-        const signeeHasTeamRole = signeeGuildMember &&
-          ALLOWED_TEAM_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
-
-        if (signeeHasTeamRole) {
-          const currentTeamRole = ALLOWED_TEAM_ROLES
-            .map(id => interaction.guild.roles.cache.get(id))
-            .find(r => r && signeeGuildMember.roles.cache.has(r.id));
-
-          return interaction.reply({
-            embeds: [
-              new EmbedBuilder()
-                .setColor(0xed4245)
-                .setTitle('⛔ Jogador Já em um Time')
-                .setDescription(`${signee} já faz parte de um time e não pode receber outro contrato de time no momento.`)
-                .addFields(
-                  { name: 'Jogador', value: `${signee}`, inline: true },
-                  { name: 'Time Atual', value: currentTeamRole ? currentTeamRole.name : 'Desconhecido', inline: true },
-                )
-                .setFooter({ text: 'The Classic Soccer Federation • O jogador deve usar /release primeiro' })
-                .setTimestamp()
-            ],
-            ephemeral: true
-          });
-        }
+        return interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xed4245)
+              .setTitle('🚫 Clubes Fechados')
+              .setDescription('Os clubes estão com as contratações fechadas no momento.\nApenas **seleções internacionais** podem contratar jogadores.')
+              .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para clubes' })
+              .setTimestamp()
+          ],
+          ephemeral: true
+        });
       }
 
       if (isInternationalContract) {
@@ -1239,54 +1224,117 @@ client.on('interactionCreate', async (interaction) => {
       const member = interaction.member;
       const FA_ROLE_ID = '1492562238761074870';
 
-      const teamRoleId = ALLOWED_TEAM_ROLES.find(id => member.roles.cache.has(id));
+      // Coleta todos os cargos de time (nacionais + internacionais) que o membro possui
+      const teamRoles = [];
+      const internationalRoles = [];
 
-      if (!teamRoleId) {
+      ALLOWED_TEAM_ROLES.forEach(roleId => {
+        if (member.roles.cache.has(roleId)) {
+          const role = interaction.guild.roles.cache.get(roleId);
+          if (role) teamRoles.push({ id: roleId, name: role.name, type: 'team' });
+        }
+      });
+
+      INTERNATIONAL_ROLES.forEach(roleId => {
+        if (member.roles.cache.has(roleId)) {
+          const role = interaction.guild.roles.cache.get(roleId);
+          if (role) internationalRoles.push({ id: roleId, name: role.name, type: 'international' });
+        }
+      });
+
+      const allOwnedRoles = [...teamRoles, ...internationalRoles];
+
+      // Nenhum cargo de time/seleção encontrado
+      if (allOwnedRoles.length === 0) {
         return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time').setDescription('Você não possui nenhum cargo de time para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time/Seleção').setDescription('Você não possui nenhum cargo de time ou seleção para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
           ephemeral: true
         });
       }
 
-      const teamRole = interaction.guild.roles.cache.get(teamRoleId);
-      const teamName = teamRole ? teamRole.name : 'Time desconhecido';
-
-      try {
-        await member.roles.remove(teamRoleId);
-        await member.roles.add(FA_ROLE_ID);
-
-        for (const [id, c] of activeContracts) {
-          if (c.signee.id === interaction.user.id) {
-            activeContracts.delete(id);
-            const timer = expirationTimers.get(id);
-            if (timer) {
-              clearTimeout(timer);
-              expirationTimers.delete(id);
+      // Função auxiliar para remover o cargo, contrato e adicionar FA se necessário
+      const releaseFromRole = async (roleId, roleName) => {
+        try {
+          await member.roles.remove(roleId);
+          
+          // Remove o contrato ativo do jogador (se houver)
+          for (const [id, c] of activeContracts) {
+            if (c.signee.id === interaction.user.id) {
+              activeContracts.delete(id);
+              const timer = expirationTimers.get(id);
+              if (timer) {
+                clearTimeout(timer);
+                expirationTimers.delete(id);
+              }
+              saveContracts();
+              break;
             }
-            saveContracts();
-            break;
           }
+
+          // Verifica se após remover este cargo, o membro ainda possui algum outro cargo de time/seleção
+          const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
+          if (!stillHasTeamOrIntl) {
+            await member.roles.add(FA_ROLE_ID);
+          }
+
+          const releaseEmbed = new EmbedBuilder()
+            .setColor(0xf0c030)
+            .setTitle('🔓 Liberação Confirmada')
+            .setDescription(`${interaction.user} não faz mais parte de **${roleName}**.`)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+              { name: 'Jogador', value: `${interaction.user}`, inline: true },
+              { name: 'Cargo Removido', value: roleName, inline: true },
+              { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
+            )
+            .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+            .setTimestamp();
+
+          return releaseEmbed;
+        } catch (err) {
+          console.error('❌ Erro ao liberar jogador:', err);
+          throw err;
         }
+      };
 
-        const releaseEmbed = new EmbedBuilder()
-          .setColor(0xf0c030)
-          .setTitle('🔓 Liberação Confirmada')
-          .setDescription(`${interaction.user} agora está como **Free Agent**!`)
-          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: 'Jogador', value: `${interaction.user}`, inline: true },
-            { name: 'Time Anterior', value: teamName, inline: true },
-            { name: 'Status', value: '🟡 Free Agent', inline: true },
-          )
-          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [releaseEmbed] });
-
-      } catch (err) {
-        console.error('❌ Erro ao liberar jogador:', err);
-        await interaction.reply({ content: '❌ Ocorreu um erro ao processar sua liberação. Verifique se o bot tem permissão para gerenciar cargos.', ephemeral: true });
+      // Se possui apenas um cargo, libera diretamente
+      if (allOwnedRoles.length === 1) {
+        const singleRole = allOwnedRoles[0];
+        try {
+          const embed = await releaseFromRole(singleRole.id, singleRole.name);
+          await interaction.reply({ embeds: [embed] });
+        } catch {
+          await interaction.reply({ content: '❌ Ocorreu um erro ao processar sua liberação. Verifique se o bot tem permissão para gerenciar cargos.', ephemeral: true });
+        }
+        return;
       }
+
+      // Possui mais de um cargo (time + internacional) -> exibe menu de seleção
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('release_select')
+        .setPlaceholder('Escolha de qual time/seleção você deseja sair...')
+        .addOptions(
+          allOwnedRoles.map(role => ({
+            label: role.name,
+            value: role.id,
+            description: role.type === 'team' ? 'Time Nacional' : 'Seleção Internacional',
+          }))
+        );
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+
+      const chooseEmbed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🤔 De qual você quer sair?')
+        .setDescription('Você possui cargos em um time nacional e em uma seleção internacional. Escolha abaixo de qual deseja se liberar.')
+        .setFooter({ text: 'The Classic Soccer Federation' })
+        .setTimestamp();
+
+      await interaction.reply({
+        embeds: [chooseEmbed],
+        components: [row],
+        ephemeral: true
+      });
     }
   }
 
@@ -1372,6 +1420,60 @@ client.on('interactionCreate', async (interaction) => {
       );
 
       await interaction.update({ content: `❌ ${contractData.signee} rejected the contract.`, embeds: [rejectEmbed], components: [disabledRow] });
+    }
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === 'release_select') {
+      const selectedRoleId = interaction.values[0];
+      const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
+      if (!selectedRole) {
+        return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
+      }
+
+      const member = interaction.member;
+      const FA_ROLE_ID = '1492562238761074870';
+
+      try {
+        await member.roles.remove(selectedRoleId);
+        
+        // Remove contrato ativo se houver
+        for (const [id, c] of activeContracts) {
+          if (c.signee.id === interaction.user.id) {
+            activeContracts.delete(id);
+            const timer = expirationTimers.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              expirationTimers.delete(id);
+            }
+            saveContracts();
+            break;
+          }
+        }
+
+        const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
+        if (!stillHasTeamOrIntl) {
+          await member.roles.add(FA_ROLE_ID);
+        }
+
+        const releaseEmbed = new EmbedBuilder()
+          .setColor(0xf0c030)
+          .setTitle('🔓 Liberação Confirmada')
+          .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
+          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+          .addFields(
+            { name: 'Jogador', value: `${interaction.user}`, inline: true },
+            { name: 'Cargo Removido', value: selectedRole.name, inline: true },
+            { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
+          )
+          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+          .setTimestamp();
+
+        await interaction.update({ embeds: [releaseEmbed], components: [] });
+      } catch (err) {
+        console.error('❌ Erro ao liberar jogador:', err);
+        await interaction.update({ content: '❌ Ocorreu um erro ao processar sua liberação.', embeds: [], components: [] });
+      }
     }
   }
 });
