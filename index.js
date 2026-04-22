@@ -1425,58 +1425,73 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === 'release_select') {
-      const selectedRoleId = interaction.values[0];
-      const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
-      if (!selectedRole) {
-        return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
-      }
+  if (interaction.customId === 'release_select') {
+    const selectedRoleId = interaction.values[0];
+    const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
+    if (!selectedRole) {
+      return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
+    }
 
-      const member = interaction.member;
-      const FA_ROLE_ID = '1492562238761074870';
+    const member = interaction.member;
+    const FA_ROLE_ID = '1492562238761074870';
 
-      try {
-        await member.roles.remove(selectedRoleId);
-        
-        // Remove contrato ativo se houver
-        for (const [id, c] of activeContracts) {
-          if (c.signee.id === interaction.user.id) {
-            activeContracts.delete(id);
-            const timer = expirationTimers.get(id);
-            if (timer) {
-              clearTimeout(timer);
-              expirationTimers.delete(id);
-            }
-            saveContracts();
-            break;
+    await interaction.deferUpdate();
+
+    try {
+      await member.roles.remove(selectedRoleId);
+      
+      for (const [id, c] of activeContracts) {
+        if (c.signee.id === interaction.user.id) {
+          activeContracts.delete(id);
+          const timer = expirationTimers.get(id);
+          if (timer) {
+            clearTimeout(timer);
+            expirationTimers.delete(id);
           }
+          saveContracts();
+          break;
         }
-
-        const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
-        if (!stillHasTeamOrIntl) {
-          await member.roles.add(FA_ROLE_ID);
-        }
-
-        const releaseEmbed = new EmbedBuilder()
-          .setColor(0xf0c030)
-          .setTitle('🔓 Liberação Confirmada')
-          .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
-          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: 'Jogador', value: `${interaction.user}`, inline: true },
-            { name: 'Cargo Removido', value: selectedRole.name, inline: true },
-            { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
-          )
-          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
-          .setTimestamp();
-
-        await interaction.update({ embeds: [releaseEmbed], components: [] });
-      } catch (err) {
-        console.error('❌ Erro ao liberar jogador:', err);
-        await interaction.update({ content: '❌ Ocorreu um erro ao processar sua liberação.', embeds: [], components: [] });
       }
+
+      const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
+      if (!stillHasTeamOrIntl) {
+        await member.roles.add(FA_ROLE_ID);
+      }
+
+      const releaseEmbed = new EmbedBuilder()
+        .setColor(0xf0c030)
+        .setTitle('🔓 Liberação Confirmada')
+        .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
+        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: 'Jogador', value: `${interaction.user}`, inline: true },
+          { name: 'Cargo Removido', value: selectedRole.name, inline: true },
+          { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
+        )
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setTimestamp();
+
+      await interaction.channel.send({
+        content: `${interaction.user} não faz mais parte de **${selectedRole.name}**.`,
+        embeds: [releaseEmbed]
+      });
+
+      await interaction.editReply({
+        content: `✅ Você saiu de **${selectedRole.name}** com sucesso!`,
+        embeds: [],
+        components: []
+      });
+
+    } catch (err) {
+      console.error('❌ Erro ao liberar jogador:', err);
+      await interaction.editReply({
+        content: '❌ Ocorreu um erro ao processar sua liberação.',
+        embeds: [],
+        components: []
+      });
     }
   }
+}
 });
 
 client.login(process.env.DISCORD_TOKEN);
