@@ -1393,7 +1393,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: 'Team', value: contractData.teamName, inline: true },
           { name: 'Position', value: contractData.position, inline: true },
           { name: 'Role', value: contractData.role, inline: true },
-          { name: 'Signed on', value: formatDate(now), inline: false },
+          { name: 'Signed on', value: `<t:${Math.floor(now.getTime() / 1000)}:F>`, inline: false },
         )
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
