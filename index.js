@@ -1,22 +1,25 @@
 const fs = require('fs');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder } = require('discord.js');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
+
 require('dotenv').config();
 
-console.log("API KEY:", process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY
+});
+
+if (!process.env.GEMINI_API_KEY) {
+  console.error("❌ GEMINI_API_KEY não encontrada!");
+}
 
 // ─────────────────────────────────────────
 // 🤖 GEMINI AI SETUP
 // ─────────────────────────────────────────
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({
-  model: "gemini-pro"
-});
 
 async function perguntarIA(msg) {
   try {
-    const result = await model.generateContent({
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
       contents: [
         {
           role: "user",
@@ -42,7 +45,7 @@ ${msg}
       ]
     });
 
-    return result?.response?.text() || "❌ Não consegui responder agora.";
+    return response.candidates?.[0]?.content?.parts?.[0]?.text || "❌ Não consegui responder.";
   } catch (err) {
     console.error("Erro IA:", err);
     return null;
