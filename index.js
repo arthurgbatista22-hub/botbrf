@@ -1,59 +1,7 @@
 const fs = require('fs');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder } = require('discord.js');
-const { GoogleGenAI } = require("@google/genai");
-
 require('dotenv').config();
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY
-});
-
-if (!process.env.GEMINI_API_KEY) {
-  console.error("❌ GEMINI_API_KEY não encontrada!");
-}
-
-// ─────────────────────────────────────────
-// 🤖 GEMINI AI SETUP
-// ─────────────────────────────────────────
-
-async function perguntarIA(msg) {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `
-Você é suporte da liga The Classic Soccer Federation.
-
-REGRAS IMPORTANTES:
-- Use /fa para free agent
-- Use /contract para contratos
-- Use /scouting para recrutar
-- Use /friendly para amistosos
-- Seja curto, claro e educado
-- Sempre responda como staff da liga
-
-Mensagem do usuário:
-${msg}
-              `
-            }
-          ]
-        }
-      ]
-    });
-
-    return response.candidates?.[0]?.content?.parts?.[0]?.text || "❌ Não consegui responder.";
-  } catch (err) {
-    console.error("Erro IA:", err);
-    return null;
-  }
-}
-// ─────────────────────────────────────────
-// CLIENT SETUP
-// ─────────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -748,11 +696,6 @@ client.on('messageReactionRemove', async (reaction, user) => {
   }
 });
 
-// ─────────────────────────────────────────
-// 💬 MESSAGE CREATE — Bloqueios + Auto Responses + IA
-// ─────────────────────────────────────────
-const cooldownIA = new Set();
-
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -760,9 +703,6 @@ client.on('messageCreate', async (message) => {
   const msgLower = message.content.toLowerCase().trim();
   const channelName = message.channel.name?.toLowerCase() || '';
 
-  // =========================
-  // 🔒 BLOQUEIO: Convites
-  // =========================
   if (
     message.member &&
     !message.member.permissions.has(PermissionFlagsBits.ManageMessages) &&
@@ -783,9 +723,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // =========================
-  // 🔒 BLOQUEIO: Divulgação
-  // =========================
   if (DIVULGACAO_REGEX.test(msgLower)) {
     const temPermissao = message.member && ALLOWED_COMMAND_ROLES.some(id => message.member.roles.cache.has(id));
     if (!temPermissao) {
@@ -803,9 +740,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // =========================
-  // 🔒 BLOQUEIO: Links Roblox
-  // =========================
   if (ROBLOX_PRIVATE_SERVER_REGEX.test(message.content)) {
     const canalPermitido = ALLOWED_ROBLOX_LINK_CHANNELS.includes(message.channelId);
     if (!canalPermitido) {
@@ -823,20 +757,16 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // =========================
-  // 📖 AUTO HELP
-  // =========================
   if (message.channelId === HELP_AUTO_CHANNEL) {
     const helpTriggers = ['help', 'ajuda', 'comandos', 'como usar', 'quais comandos'];
     const isHelpMsg = helpTriggers.some(t => msgLower.includes(t));
     if (isHelpMsg) {
       try {
         await message.delete().catch(() => {});
-        const msg = await message.channel.send({
+        await message.channel.send({
           content: `${message.author}`,
           embeds: [buildHelpEmbed()],
-        });
-        setTimeout(() => msg.delete().catch(() => {}), 30000);
+        }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
       } catch (err) {
         console.error('Erro ao enviar help automático:', err);
       }
@@ -844,38 +774,15 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // =========================
-  // ⚡ AUTO RESPONSES (PRIORIDADE)
-  // =========================
   for (const entry of AUTO_RESPONSES) {
-    if (entry.keywords.some(keyword => msgLower.includes(keyword))) {
+    const matched = entry.keywords.some(keyword => msgLower.includes(keyword));
+    if (matched) {
       try {
         await message.reply({ content: entry.response });
       } catch (err) {
         console.error('Erro ao enviar resposta automática:', err);
       }
       return;
-    }
-  }
-
-  // =========================
-  // 🤖 IA GEMINI (só em canais ticket-)
-  // =========================
-  if (!channelName.startsWith('ticket-')) return;
-
-  // Cooldown anti-spam: 5s por usuário
-  if (cooldownIA.has(message.author.id)) return;
-
-  cooldownIA.add(message.author.id);
-  setTimeout(() => cooldownIA.delete(message.author.id), 5000);
-
-  const resposta = await perguntarIA(message.content);
-
-  if (resposta) {
-    try {
-      await message.reply(resposta);
-    } catch (err) {
-      console.error('Erro ao enviar resposta da IA:', err);
     }
   }
 });
@@ -920,6 +827,7 @@ client.on('interactionCreate', async (interaction) => {
       const role = interaction.options.getString('role');
       const contractor = interaction.user;
 
+      // Verifica contrato ativo existente
       const existingContract = [...activeContracts.values()].find(c => c.signee.id === signee.id);
       if (existingContract) {
         return interaction.reply({
@@ -933,6 +841,10 @@ client.on('interactionCreate', async (interaction) => {
       const isTeamContract = ALLOWED_TEAM_ROLES.includes(teamRole.id);
       const isInternationalContract = INTERNATIONAL_ROLES.includes(teamRole.id);
 
+      // ═══════════════════════════════════════════════════
+      // 🚫 BLOQUEIO DE CONTRATOS PARA CLUBES (ALLOWED_TEAM_ROLES)
+      // Apenas seleções (INTERNATIONAL_ROLES) podem contratar no momento.
+      // ═══════════════════════════════════════════════════
       if (isTeamContract) {
         return interaction.reply({
           embeds: [
@@ -948,6 +860,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (isInternationalContract) {
+        // Verifica se já tem cargo de seleção internacional
         const signeeHasIntlRole = signeeGuildMember &&
           INTERNATIONAL_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
 
@@ -1312,6 +1225,7 @@ client.on('interactionCreate', async (interaction) => {
       const member = interaction.member;
       const FA_ROLE_ID = '1492562238761074870';
 
+      // Coleta todos os cargos de time (nacionais + internacionais) que o membro possui
       const teamRoles = [];
       const internationalRoles = [];
 
@@ -1331,6 +1245,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const allOwnedRoles = [...teamRoles, ...internationalRoles];
 
+      // Nenhum cargo de time/seleção encontrado
       if (allOwnedRoles.length === 0) {
         return interaction.reply({
           embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time/Seleção').setDescription('Você não possui nenhum cargo de time ou seleção para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
@@ -1338,10 +1253,12 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
+      // Função auxiliar para remover o cargo, contrato e adicionar FA se necessário
       const releaseFromRole = async (roleId, roleName) => {
         try {
           await member.roles.remove(roleId);
           
+          // Remove o contrato ativo do jogador (se houver)
           for (const [id, c] of activeContracts) {
             if (c.signee.id === interaction.user.id) {
               activeContracts.delete(id);
@@ -1355,6 +1272,7 @@ client.on('interactionCreate', async (interaction) => {
             }
           }
 
+          // Verifica se após remover este cargo, o membro ainda possui algum outro cargo de time/seleção
           const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
           if (!stillHasTeamOrIntl) {
             await member.roles.add(FA_ROLE_ID);
@@ -1380,6 +1298,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       };
 
+      // Se possui apenas um cargo, libera diretamente
       if (allOwnedRoles.length === 1) {
         const singleRole = allOwnedRoles[0];
         try {
@@ -1391,6 +1310,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
+      // Possui mais de um cargo (time + internacional) -> exibe menu de seleção
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('release_select')
         .setPlaceholder('Escolha de qual time/seleção você deseja sair...')
@@ -1505,73 +1425,73 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === 'release_select') {
-      const selectedRoleId = interaction.values[0];
-      const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
-      if (!selectedRole) {
-        return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
-      }
+  if (interaction.customId === 'release_select') {
+    const selectedRoleId = interaction.values[0];
+    const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
+    if (!selectedRole) {
+      return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
+    }
 
-      const member = interaction.member;
-      const FA_ROLE_ID = '1492562238761074870';
+    const member = interaction.member;
+    const FA_ROLE_ID = '1492562238761074870';
 
-      await interaction.deferUpdate();
+    await interaction.deferUpdate();
 
-      try {
-        await member.roles.remove(selectedRoleId);
-        
-        for (const [id, c] of activeContracts) {
-          if (c.signee.id === interaction.user.id) {
-            activeContracts.delete(id);
-            const timer = expirationTimers.get(id);
-            if (timer) {
-              clearTimeout(timer);
-              expirationTimers.delete(id);
-            }
-            saveContracts();
-            break;
+    try {
+      await member.roles.remove(selectedRoleId);
+      
+      for (const [id, c] of activeContracts) {
+        if (c.signee.id === interaction.user.id) {
+          activeContracts.delete(id);
+          const timer = expirationTimers.get(id);
+          if (timer) {
+            clearTimeout(timer);
+            expirationTimers.delete(id);
           }
+          saveContracts();
+          break;
         }
-
-        const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
-        if (!stillHasTeamOrIntl) {
-          await member.roles.add(FA_ROLE_ID);
-        }
-
-        const releaseEmbed = new EmbedBuilder()
-          .setColor(0xf0c030)
-          .setTitle('🔓 Liberação Confirmada')
-          .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
-          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-          .addFields(
-            { name: 'Jogador', value: `${interaction.user}`, inline: true },
-            { name: 'Cargo Removido', value: selectedRole.name, inline: true },
-            { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
-          )
-          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
-          .setTimestamp();
-
-        await interaction.channel.send({
-          content: `${interaction.user} não faz mais parte de **${selectedRole.name}**.`,
-          embeds: [releaseEmbed]
-        });
-
-        await interaction.editReply({
-          content: `✅ Você saiu de **${selectedRole.name}** com sucesso!`,
-          embeds: [],
-          components: []
-        });
-
-      } catch (err) {
-        console.error('❌ Erro ao liberar jogador:', err);
-        await interaction.editReply({
-          content: '❌ Ocorreu um erro ao processar sua liberação.',
-          embeds: [],
-          components: []
-        });
       }
+
+      const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
+      if (!stillHasTeamOrIntl) {
+        await member.roles.add(FA_ROLE_ID);
+      }
+
+      const releaseEmbed = new EmbedBuilder()
+        .setColor(0xf0c030)
+        .setTitle('🔓 Liberação Confirmada')
+        .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
+        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: 'Jogador', value: `${interaction.user}`, inline: true },
+          { name: 'Cargo Removido', value: selectedRole.name, inline: true },
+          { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
+        )
+        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+        .setTimestamp();
+
+      await interaction.channel.send({
+        content: `${interaction.user} não faz mais parte de **${selectedRole.name}**.`,
+        embeds: [releaseEmbed]
+      });
+
+      await interaction.editReply({
+        content: `✅ Você saiu de **${selectedRole.name}** com sucesso!`,
+        embeds: [],
+        components: []
+      });
+
+    } catch (err) {
+      console.error('❌ Erro ao liberar jogador:', err);
+      await interaction.editReply({
+        content: '❌ Ocorreu um erro ao processar sua liberação.',
+        embeds: [],
+        components: []
+      });
     }
   }
+}
 });
 
 client.login(process.env.DISCORD_TOKEN);
