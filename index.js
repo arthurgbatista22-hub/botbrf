@@ -3,6 +3,8 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 require('dotenv').config();
 
+console.log("API KEY:", process.env.GEMINI_API_KEY);
+
 // ─────────────────────────────────────────
 // 🤖 GEMINI AI SETUP
 // ─────────────────────────────────────────
