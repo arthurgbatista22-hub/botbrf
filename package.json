@@ -1,12 +1,13 @@
 {
   "name": "brf-contract-bot",
   "version": "1.0.0",
-  "description": "Bot de contratos - Brazilian Roblox Federation",
+  "description": "Bot para gerenciamento de contratos, free agents e scouting no servidor da TCSF",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "discord.js": "^14.14.1",
     "dotenv": "^17.4.1"
   }
