@@ -751,7 +751,7 @@ client.on('messageCreate', async (message) => {
   if (
     message.member &&
     !message.member.permissions.has(PermissionFlagsBits.ManageMessages) &&
-    !channelName.startsWith('ticket-')
+    !channelName.startsWith('ticket')
   ) {
     if (INVITE_REGEX.test(message.content)) {
       try {
@@ -844,25 +844,23 @@ client.on('messageCreate', async (message) => {
   }
 
   // =========================
-  // 🤖 IA GEMINI (só se nada acima respondeu)
+  // 🤖 IA GEMINI (só em canais ticket-)
   // =========================
-  if (channelName.startsWith('ticket')) return;
+  if (!channelName.startsWith('ticket-')) return;
 
-  if (!message.content.startsWith('/')) {
-    // Cooldown anti-spam: 5s por usuário
-    if (cooldownIA.has(message.author.id)) return;
+  // Cooldown anti-spam: 5s por usuário
+  if (cooldownIA.has(message.author.id)) return;
 
-    cooldownIA.add(message.author.id);
-    setTimeout(() => cooldownIA.delete(message.author.id), 5000);
+  cooldownIA.add(message.author.id);
+  setTimeout(() => cooldownIA.delete(message.author.id), 5000);
 
-    const resposta = await perguntarIA(message.content);
+  const resposta = await perguntarIA(message.content);
 
-    if (resposta) {
-      try {
-        await message.reply(resposta);
-      } catch (err) {
-        console.error('Erro ao enviar resposta da IA:', err);
-      }
+  if (resposta) {
+    try {
+      await message.reply(resposta);
+    } catch (err) {
+      console.error('Erro ao enviar resposta da IA:', err);
     }
   }
 });
