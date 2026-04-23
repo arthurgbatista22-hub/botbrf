@@ -9,12 +9,18 @@ require('dotenv').config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash"
+  model: "gemini-1.5-flash"
 });
 
 async function perguntarIA(msg) {
   try {
-    const result = await model.generateContent(`
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `
 Você é suporte da liga The Classic Soccer Federation.
 
 REGRAS IMPORTANTES:
@@ -27,15 +33,19 @@ REGRAS IMPORTANTES:
 
 Mensagem do usuário:
 ${msg}
-    `);
+              `
+            }
+          ]
+        }
+      ]
+    });
 
-    return result.response.text();
+    return result?.response?.text() || "❌ Não consegui responder agora.";
   } catch (err) {
     console.error("Erro IA:", err);
     return null;
   }
 }
-
 // ─────────────────────────────────────────
 // CLIENT SETUP
 // ─────────────────────────────────────────
