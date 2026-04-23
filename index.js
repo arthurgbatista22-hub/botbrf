@@ -89,6 +89,77 @@ const PING_INTERVAL = 2 * 24 * 60 * 60 * 1000;
 let reactionMessageId = null;
 let pingIntervalTimer = null;
 
+// ═══════════════════════════════════════════════════
+// 🎫 SISTEMA DE AUTO-RESPOSTA EM TICKETS
+// ═══════════════════════════════════════════════════
+
+const TICKET_AUTO_RESPONSES = [
+  {
+    keywords: ['ownar', 'quero ownar', 'como ownar'],
+    embed: {
+      title: '👑 Como Ownar um Time',
+      description:
+        `Para ownar um time na **The Classic Soccer Federation**, siga os passos:\n\n` +
+        `1️⃣ Monte sua **squad (squadsheet)**\n` +
+        `2️⃣ Envie sua squadsheet neste ticket\n` +
+        `3️⃣ Aguarde a análise da staff\n\n` +
+        `⚠️ Apenas squads organizadas serão aceitas.\n\n` +
+        `📌 Um staff irá te responder em breve.`,
+      color: 0xf1c40f
+    }
+  },
+  {
+    keywords: ['parceria', 'partner', 'parceiro'],
+    embed: {
+      title: '🤝 Parceria',
+      description:
+        `Para fazer uma parceria com a liga:\n\n` +
+        `📌 Envie as seguintes informações:\n` +
+        `• Link de convite\n` +
+        `• Quantidade de membros\n` +
+        `⏳ Aguarde um staff analisar seu pedido.`,
+      color: 0x3498db
+    }
+  },
+  {
+    keywords: ['suporte', 'ajuda', 'help', 'denuncia'],
+    embed: {
+      title: '🆘 Suporte',
+      description:
+        `Explique seu problema com o máximo de detalhes possível.\n\n` +
+        `📌 Um membro da staff irá te ajudar em breve.\n\n` +
+        `⏳ Aguarde...`,
+      color: 0xe74c3c
+    }
+  }
+];
+
+// ═══════════════════════════════════════════════════
+// 🎫 MENSAGEM DE BOAS-VINDAS AO ABRIR TICKET
+// ═══════════════════════════════════════════════════
+
+async function sendTicketWelcome(channel, user) {
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('🎫 Ticket Aberto')
+    .setDescription(
+      `Olá ${user}! Seja bem-vindo ao suporte da **The Classic Soccer Federation**.\n\n` +
+      `Escolha uma opção abaixo digitando:\n\n` +
+      `👑 **Ownar** — Quero ownar um time\n` +
+      `🤝 **Parceria** — Quero fazer parceria\n` +
+      `🆘 **Suporte** — Preciso de ajuda\n\n` +
+      `Ou explique diretamente seu problema que um staff irá te atender.`
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • Responderemos em breve!' })
+    .setTimestamp();
+
+  try {
+    await channel.send({ embeds: [welcomeEmbed] });
+  } catch (err) {
+    console.error('❌ Erro ao enviar mensagem de boas-vindas do ticket:', err);
+  }
+}
+
 function saveLastPingTime() {
   fs.writeFileSync(PING_INTERVAL_FILE, JSON.stringify({ lastPing: Date.now() }));
 }
@@ -630,6 +701,44 @@ client.once('ready', async () => {
   }
 });
 
+// ═══════════════════════════════════════════════════
+// 🎫 DETECTAR CRIAÇÃO DE CANAL DE TICKET
+// ═══════════════════════════════════════════════════
+
+client.on('channelCreate', async (channel) => {
+  if (!channel.name) return;
+  const channelName = channel.name.toLowerCase();
+
+  if (channelName.startsWith('ticket')) {
+    console.log(`🎫 Novo ticket criado: #${channel.name}`);
+
+    // Tenta descobrir quem criou o ticket pelo primeiro membro não-bot com permissão de leitura
+    await new Promise(res => setTimeout(res, 1500)); // pequeno delay para o canal estar pronto
+
+    try {
+      // Busca o membro que tem acesso ao ticket (geralmente o criador)
+      const members = channel.permissionOverwrites?.cache;
+      let ticketOwner = null;
+
+      if (members) {
+        for (const [id, overwrite] of members) {
+          if (overwrite.type === 1) { // type 1 = member
+            const member = await channel.guild.members.fetch(id).catch(() => null);
+            if (member && !member.user.bot) {
+              ticketOwner = member.user;
+              break;
+            }
+          }
+        }
+      }
+
+      await sendTicketWelcome(channel, ticketOwner ? `<@${ticketOwner.id}>` : 'usuário');
+    } catch (err) {
+      console.error('❌ Erro ao enviar boas-vindas no ticket:', err);
+    }
+  }
+});
+
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
   if (reaction.message.id !== reactionMessageId) return;
@@ -702,11 +811,12 @@ client.on('messageCreate', async (message) => {
 
   const msgLower = message.content.toLowerCase().trim();
   const channelName = message.channel.name?.toLowerCase() || '';
+  const isTicket = channelName.startsWith('ticket');
 
   if (
     message.member &&
     !message.member.permissions.has(PermissionFlagsBits.ManageMessages) &&
-    !channelName.startsWith('ticket')
+    !isTicket
   ) {
     if (INVITE_REGEX.test(message.content)) {
       try {
@@ -774,6 +884,50 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  // ═══════════════════════════════════════════════════
+  // 🎫 AUTO-RESPOSTA EM CANAIS DE TICKET
+  // ═══════════════════════════════════════════════════
+
+  if (isTicket) {
+    for (const entry of TICKET_AUTO_RESPONSES) {
+      const matched = entry.keywords.some(k => msgLower.includes(k));
+
+      if (matched) {
+        try {
+          const embed = new EmbedBuilder()
+            .setColor(entry.embed.color)
+            .setTitle(entry.embed.title)
+            .setDescription(entry.embed.description)
+            .setFooter({ text: 'The Classic Soccer Federation' })
+            .setTimestamp();
+
+          const sent = await message.channel.send({
+            content: `${message.author}`,
+            embeds: [embed]
+          });
+
+          console.log(`🎫 Auto-resposta de ticket enviada em #${message.channel.name} para ${message.author.tag} (keyword: ${entry.embed.title})`);
+
+          // Apaga a resposta automática após 60 segundos
+          setTimeout(() => {
+            sent.delete().catch(() => {});
+          }, 60000);
+
+        } catch (err) {
+          console.error('❌ Erro no auto ticket:', err);
+        }
+
+        break; // Para na primeira keyword que bater
+      }
+    }
+
+    return; // Não processa AUTO_RESPONSES normais dentro de tickets
+  }
+
+  // ═══════════════════════════════════════════════════
+  // AUTO-RESPOSTAS GERAIS (fora de tickets)
+  // ═══════════════════════════════════════════════════
+
   for (const entry of AUTO_RESPONSES) {
     const matched = entry.keywords.some(keyword => msgLower.includes(keyword));
     if (matched) {
@@ -827,7 +981,6 @@ client.on('interactionCreate', async (interaction) => {
       const role = interaction.options.getString('role');
       const contractor = interaction.user;
 
-      // Verifica contrato ativo existente
       const existingContract = [...activeContracts.values()].find(c => c.signee.id === signee.id);
       if (existingContract) {
         return interaction.reply({
@@ -841,10 +994,6 @@ client.on('interactionCreate', async (interaction) => {
       const isTeamContract = ALLOWED_TEAM_ROLES.includes(teamRole.id);
       const isInternationalContract = INTERNATIONAL_ROLES.includes(teamRole.id);
 
-      // ═══════════════════════════════════════════════════
-      // 🚫 BLOQUEIO DE CONTRATOS PARA CLUBES (ALLOWED_TEAM_ROLES)
-      // Apenas seleções (INTERNATIONAL_ROLES) podem contratar no momento.
-      // ═══════════════════════════════════════════════════
       if (isTeamContract) {
         return interaction.reply({
           embeds: [
@@ -860,7 +1009,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (isInternationalContract) {
-        // Verifica se já tem cargo de seleção internacional
         const signeeHasIntlRole = signeeGuildMember &&
           INTERNATIONAL_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
 
@@ -1225,7 +1373,6 @@ client.on('interactionCreate', async (interaction) => {
       const member = interaction.member;
       const FA_ROLE_ID = '1492562238761074870';
 
-      // Coleta todos os cargos de time (nacionais + internacionais) que o membro possui
       const teamRoles = [];
       const internationalRoles = [];
 
@@ -1245,7 +1392,6 @@ client.on('interactionCreate', async (interaction) => {
 
       const allOwnedRoles = [...teamRoles, ...internationalRoles];
 
-      // Nenhum cargo de time/seleção encontrado
       if (allOwnedRoles.length === 0) {
         return interaction.reply({
           embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time/Seleção').setDescription('Você não possui nenhum cargo de time ou seleção para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
@@ -1253,12 +1399,10 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      // Função auxiliar para remover o cargo, contrato e adicionar FA se necessário
       const releaseFromRole = async (roleId, roleName) => {
         try {
           await member.roles.remove(roleId);
           
-          // Remove o contrato ativo do jogador (se houver)
           for (const [id, c] of activeContracts) {
             if (c.signee.id === interaction.user.id) {
               activeContracts.delete(id);
@@ -1272,7 +1416,6 @@ client.on('interactionCreate', async (interaction) => {
             }
           }
 
-          // Verifica se após remover este cargo, o membro ainda possui algum outro cargo de time/seleção
           const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
           if (!stillHasTeamOrIntl) {
             await member.roles.add(FA_ROLE_ID);
@@ -1298,7 +1441,6 @@ client.on('interactionCreate', async (interaction) => {
         }
       };
 
-      // Se possui apenas um cargo, libera diretamente
       if (allOwnedRoles.length === 1) {
         const singleRole = allOwnedRoles[0];
         try {
@@ -1310,7 +1452,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      // Possui mais de um cargo (time + internacional) -> exibe menu de seleção
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('release_select')
         .setPlaceholder('Escolha de qual time/seleção você deseja sair...')
@@ -1425,73 +1566,73 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isStringSelectMenu()) {
-  if (interaction.customId === 'release_select') {
-    const selectedRoleId = interaction.values[0];
-    const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
-    if (!selectedRole) {
-      return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
-    }
+    if (interaction.customId === 'release_select') {
+      const selectedRoleId = interaction.values[0];
+      const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
+      if (!selectedRole) {
+        return interaction.update({ content: '❌ Cargo não encontrado.', embeds: [], components: [] });
+      }
 
-    const member = interaction.member;
-    const FA_ROLE_ID = '1492562238761074870';
+      const member = interaction.member;
+      const FA_ROLE_ID = '1492562238761074870';
 
-    await interaction.deferUpdate();
+      await interaction.deferUpdate();
 
-    try {
-      await member.roles.remove(selectedRoleId);
-      
-      for (const [id, c] of activeContracts) {
-        if (c.signee.id === interaction.user.id) {
-          activeContracts.delete(id);
-          const timer = expirationTimers.get(id);
-          if (timer) {
-            clearTimeout(timer);
-            expirationTimers.delete(id);
+      try {
+        await member.roles.remove(selectedRoleId);
+        
+        for (const [id, c] of activeContracts) {
+          if (c.signee.id === interaction.user.id) {
+            activeContracts.delete(id);
+            const timer = expirationTimers.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              expirationTimers.delete(id);
+            }
+            saveContracts();
+            break;
           }
-          saveContracts();
-          break;
         }
+
+        const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
+        if (!stillHasTeamOrIntl) {
+          await member.roles.add(FA_ROLE_ID);
+        }
+
+        const releaseEmbed = new EmbedBuilder()
+          .setColor(0xf0c030)
+          .setTitle('🔓 Liberação Confirmada')
+          .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
+          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+          .addFields(
+            { name: 'Jogador', value: `${interaction.user}`, inline: true },
+            { name: 'Cargo Removido', value: selectedRole.name, inline: true },
+            { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
+          )
+          .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
+          .setTimestamp();
+
+        await interaction.channel.send({
+          content: `${interaction.user} não faz mais parte de **${selectedRole.name}**.`,
+          embeds: [releaseEmbed]
+        });
+
+        await interaction.editReply({
+          content: `✅ Você saiu de **${selectedRole.name}** com sucesso!`,
+          embeds: [],
+          components: []
+        });
+
+      } catch (err) {
+        console.error('❌ Erro ao liberar jogador:', err);
+        await interaction.editReply({
+          content: '❌ Ocorreu um erro ao processar sua liberação.',
+          embeds: [],
+          components: []
+        });
       }
-
-      const stillHasTeamOrIntl = [...ALLOWED_TEAM_ROLES, ...INTERNATIONAL_ROLES].some(rid => member.roles.cache.has(rid));
-      if (!stillHasTeamOrIntl) {
-        await member.roles.add(FA_ROLE_ID);
-      }
-
-      const releaseEmbed = new EmbedBuilder()
-        .setColor(0xf0c030)
-        .setTitle('🔓 Liberação Confirmada')
-        .setDescription(`${interaction.user} não faz mais parte de **${selectedRole.name}**.`)
-        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-        .addFields(
-          { name: 'Jogador', value: `${interaction.user}`, inline: true },
-          { name: 'Cargo Removido', value: selectedRole.name, inline: true },
-          { name: 'Status', value: stillHasTeamOrIntl ? 'Ainda em outro time/seleção' : '🟡 Free Agent', inline: true },
-        )
-        .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
-        .setTimestamp();
-
-      await interaction.channel.send({
-        content: `${interaction.user} não faz mais parte de **${selectedRole.name}**.`,
-        embeds: [releaseEmbed]
-      });
-
-      await interaction.editReply({
-        content: `✅ Você saiu de **${selectedRole.name}** com sucesso!`,
-        embeds: [],
-        components: []
-      });
-
-    } catch (err) {
-      console.error('❌ Erro ao liberar jogador:', err);
-      await interaction.editReply({
-        content: '❌ Ocorreu um erro ao processar sua liberação.',
-        embeds: [],
-        components: []
-      });
     }
   }
-}
 });
 
 client.login(process.env.DISCORD_TOKEN);
