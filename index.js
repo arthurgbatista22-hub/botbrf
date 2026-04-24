@@ -90,6 +90,81 @@ let reactionMessageId = null;
 let pingIntervalTimer = null;
 
 // ═══════════════════════════════════════════════════
+// 🪟 SISTEMA DE JANELA DE TRANSFERÊNCIAS
+// ═══════════════════════════════════════════════════
+
+const TRANSFER_WINDOW_FILE = './transfer_window.json';
+
+// Estado padrão: clubs fechado, internacional aberto
+let transferWindow = {
+  clubs: false,        // false = fechado, true = aberto
+  internacional: true  // false = fechado, true = aberto
+};
+
+function saveTransferWindow() {
+  fs.writeFileSync(TRANSFER_WINDOW_FILE, JSON.stringify(transferWindow, null, 2));
+}
+
+function loadTransferWindow() {
+  if (!fs.existsSync(TRANSFER_WINDOW_FILE)) {
+    saveTransferWindow();
+    return;
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(TRANSFER_WINDOW_FILE, 'utf8'));
+    transferWindow.clubs = data.clubs ?? false;
+    transferWindow.internacional = data.internacional ?? true;
+    console.log(`📂 Janelas carregadas — Clubs: ${transferWindow.clubs ? '🟢 Aberta' : '🔴 Fechada'} | Internacional: ${transferWindow.internacional ? '🟢 Aberta' : '🔴 Fechada'}`);
+  } catch (err) {
+    console.error('Erro ao carregar transfer window:', err);
+    saveTransferWindow();
+  }
+}
+
+function buildTransferWindowEmbed() {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('🪟 Janela de Transferências')
+    .setDescription('Selecione qual janela deseja **abrir** ou **fechar**:')
+    .addFields(
+      {
+        name: '🏟️ Clubs',
+        value: transferWindow.clubs ? '🟢 **Aberta** — Clubes podem contratar jogadores' : '🔴 **Fechada** — Clubes não podem contratar jogadores',
+        inline: false
+      },
+      {
+        name: '🌍 Internacional',
+        value: transferWindow.internacional ? '🟢 **Aberta** — Seleções podem contratar jogadores' : '🔴 **Fechada** — Seleções não podem contratar jogadores',
+        inline: false
+      }
+    )
+    .setFooter({ text: 'The Classic Soccer Federation • Apenas Administradores' })
+    .setTimestamp();
+}
+
+function buildTransferWindowSelectMenu() {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('transfer_window_select')
+      .setPlaceholder('Escolha qual janela deseja alternar...')
+      .addOptions([
+        {
+          label: `Clubs — ${transferWindow.clubs ? 'Fechar' : 'Abrir'}`,
+          value: 'clubs',
+          description: transferWindow.clubs ? 'Fechar janela de clubes' : 'Abrir janela de clubes',
+          emoji: '🏟️'
+        },
+        {
+          label: `Internacional — ${transferWindow.internacional ? 'Fechar' : 'Abrir'}`,
+          value: 'internacional',
+          description: transferWindow.internacional ? 'Fechar janela de seleções' : 'Abrir janela de seleções',
+          emoji: '🌍'
+        }
+      ])
+  );
+}
+
+// ═══════════════════════════════════════════════════
 // 🎫 SISTEMA DE AUTO-RESPOSTA EM TICKETS
 // ═══════════════════════════════════════════════════
 
@@ -658,6 +733,13 @@ const commands = [
     .setDescription('(Admin) Envia a mensagem de cargos por reação')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
+  // ─── NOVO COMANDO ───────────────────────────────────
+  new SlashCommandBuilder()
+    .setName('janela')
+    .setDescription('(Admin) Abre ou fecha a janela de transferências')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  // ────────────────────────────────────────────────────
+
   new SlashCommandBuilder()
     .setName('announce')
     .setDescription('Faz um anúncio em formato embed em um canal específico (Apenas Administradores)')
@@ -677,6 +759,7 @@ client.once('ready', async () => {
   console.log(`✅ Bot online como: ${client.user.tag}`);
 
   loadContracts();
+  loadTransferWindow(); // ← carrega janelas ao iniciar
   reactionMessageId = loadReactionMessageId();
 
   const guild = client.guilds.cache.first();
@@ -712,17 +795,15 @@ client.on('channelCreate', async (channel) => {
   if (channelName.startsWith('ticket')) {
     console.log(`🎫 Novo ticket criado: #${channel.name}`);
 
-    // Tenta descobrir quem criou o ticket pelo primeiro membro não-bot com permissão de leitura
-    await new Promise(res => setTimeout(res, 1500)); // pequeno delay para o canal estar pronto
+    await new Promise(res => setTimeout(res, 1500));
 
     try {
-      // Busca o membro que tem acesso ao ticket (geralmente o criador)
       const members = channel.permissionOverwrites?.cache;
       let ticketOwner = null;
 
       if (members) {
         for (const [id, overwrite] of members) {
-          if (overwrite.type === 1) { // type 1 = member
+          if (overwrite.type === 1) {
             const member = await channel.guild.members.fetch(id).catch(() => null);
             if (member && !member.user.bot) {
               ticketOwner = member.user;
@@ -908,7 +989,6 @@ client.on('messageCreate', async (message) => {
 
           console.log(`🎫 Auto-resposta de ticket enviada em #${message.channel.name} para ${message.author.tag} (keyword: ${entry.embed.title})`);
 
-          // Apaga a resposta automática após 60 segundos
           setTimeout(() => {
             sent.delete().catch(() => {});
           }, 60000);
@@ -917,11 +997,11 @@ client.on('messageCreate', async (message) => {
           console.error('❌ Erro no auto ticket:', err);
         }
 
-        break; // Para na primeira keyword que bater
+        break;
       }
     }
 
-    return; // Não processa AUTO_RESPONSES normais dentro de tickets
+    return;
   }
 
   // ═══════════════════════════════════════════════════
@@ -960,6 +1040,35 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // ═══════════════════════════════════════════════════
+    // 🪟 COMANDO /janela
+    // ═══════════════════════════════════════════════════
+
+   if (interaction.commandName === 'janela') {
+  // Validação dupla de segurança
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('🔒 Acesso Negado')
+          .setDescription('Apenas **administradores** podem usar este comando.')
+          .setFooter({ text: 'The Classic Soccer Federation' })
+          .setTimestamp()
+      ],
+      ephemeral: true
+    });
+  }
+
+  return interaction.reply({
+    embeds: [buildTransferWindowEmbed()],
+    components: [buildTransferWindowSelectMenu()],
+    ephemeral: true
+  });
+}
+
+    // ═══════════════════════════════════════════════════
+
     if (interaction.commandName === 'contract') {
       if (!isContractChannelAllowed(interaction.channelId)) {
         return interaction.reply({
@@ -994,21 +1103,40 @@ client.on('interactionCreate', async (interaction) => {
       const isTeamContract = ALLOWED_TEAM_ROLES.includes(teamRole.id);
       const isInternationalContract = INTERNATIONAL_ROLES.includes(teamRole.id);
 
+      // ─── VERIFICAÇÃO DE JANELA ──────────────────────────
+
       if (isTeamContract) {
-        return interaction.reply({
-          embeds: [
-            new EmbedBuilder()
-              .setColor(0xed4245)
-              .setTitle('🚫 Clubes Fechados')
-              .setDescription('Os clubes estão com as contratações fechadas no momento.\nApenas **seleções internacionais** podem contratar jogadores.')
-              .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para clubes' })
-              .setTimestamp()
-          ],
-          ephemeral: true
-        });
+        if (!transferWindow.clubs) {
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xed4245)
+                .setTitle('🚫 Janela de Clubs Fechada')
+                .setDescription('A janela de transferências para **clubes** está fechada no momento.\nApenas **seleções internacionais** podem contratar jogadores.')
+                .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para clubes' })
+                .setTimestamp()
+            ],
+            ephemeral: true
+          });
+        }
       }
 
       if (isInternationalContract) {
+        if (!transferWindow.internacional) {
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xed4245)
+                .setTitle('🚫 Janela Internacional Fechada')
+                .setDescription('A janela de transferências para **seleções internacionais** está fechada no momento.')
+                .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para seleções' })
+                .setTimestamp()
+            ],
+            ephemeral: true
+          });
+        }
+
+        // Verificação de jogador já em seleção (mantida do código original)
         const signeeHasIntlRole = signeeGuildMember &&
           INTERNATIONAL_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
 
@@ -1034,6 +1162,8 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
       }
+
+      // ────────────────────────────────────────────────────
 
       if (!isRoleAllowed(teamRole)) {
         return interaction.reply({
@@ -1566,6 +1696,47 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isStringSelectMenu()) {
+
+    // ═══════════════════════════════════════════════════
+    // 🪟 SELECT MENU DA JANELA DE TRANSFERÊNCIAS
+    // ═══════════════════════════════════════════════════
+
+    if (interaction.customId === 'transfer_window_select') {
+      const selected = interaction.values[0]; // 'clubs' ou 'internacional'
+
+      // Faz o toggle
+      transferWindow[selected] = !transferWindow[selected];
+      saveTransferWindow();
+
+      const nomeLegivel = selected === 'clubs' ? '🏟️ Clubs' : '🌍 Internacional';
+      const novoEstado = transferWindow[selected] ? '🟢 **Aberta**' : '🔴 **Fechada**';
+
+      console.log(`🪟 Janela "${selected}" alterada para: ${transferWindow[selected] ? 'ABERTA' : 'FECHADA'} por ${interaction.user.tag}`);
+
+      // Atualiza o embed com o novo estado
+      await interaction.update({
+        embeds: [buildTransferWindowEmbed()],
+        components: [buildTransferWindowSelectMenu()]
+      });
+
+      // Envia confirmação separada (ephemeral)
+      await interaction.followUp({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(transferWindow[selected] ? 0x57f287 : 0xed4245)
+            .setTitle('🪟 Janela Atualizada')
+            .setDescription(`A janela **${nomeLegivel}** foi alterada para ${novoEstado}.`)
+            .setFooter({ text: `The Classic Soccer Federation • Alterado por ${interaction.user.username}` })
+            .setTimestamp()
+        ],
+        ephemeral: true
+      });
+
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════
+
     if (interaction.customId === 'release_select') {
       const selectedRoleId = interaction.values[0];
       const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
