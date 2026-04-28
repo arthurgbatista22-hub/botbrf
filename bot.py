@@ -1,7 +1,3 @@
-"""
-The Classic Soccer Federation — Discord Bot
-Migrado para discord.py com Components V2 (DesignerView, Container, Section, etc.)
-"""
 
 import discord
 from discord.ext import commands
@@ -187,7 +183,7 @@ intents.message_content = True
 intents.members = True
 intents.reactions = True
 
-bot = commands.Bot(intents=intents)
+bot = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
 
 # Estado em memória
 pending_contracts: dict = {}   # contractId -> dict
