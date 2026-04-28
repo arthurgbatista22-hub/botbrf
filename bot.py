@@ -5,7 +5,7 @@ Migrado para discord.py com Components V2 (DesignerView, Container, Section, etc
 
 import discord
 from discord.ext import commands
-from discord import option
+from discord import app_commands
 import json
 import os
 import asyncio
