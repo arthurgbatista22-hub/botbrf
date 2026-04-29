@@ -96,7 +96,7 @@ let pingIntervalTimer = null;
 // Canal fixo para anúncios de scrim
 const SCRIM_CHANNEL = '1491439536545202216';
 // Cargo necessário para usar o comando /scrim
-const SCRIM_HOSTER_ROLES = [
+const SCRIM_HOSTER_ROLE = [
     '1491442295898243072',
     '1492271517508178081',
     '1492271438068191262',
@@ -1214,7 +1214,7 @@ client.on('interactionCreate', async (interaction) => {
       // Campos do modal
       const formatoInput = new TextInputBuilder()
         .setCustomId('scrim_formato')
-        .setLabel('📋 Formato da Scrim')
+        .setLabel('Formato da Scrim')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Ex: 5v5, 3v3, etc.')
         .setRequired(true)
@@ -1222,7 +1222,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const requisitosInput = new TextInputBuilder()
         .setCustomId('scrim_requisitos')
-        .setLabel('👥 Quantidade de jogadores necessária')
+        .setLabel('Quantidade de jogadores necessária')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Ex: 4')
         .setRequired(true)
@@ -1230,7 +1230,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const hostInput = new TextInputBuilder()
         .setCustomId('scrim_host')
-        .setLabel('👤 Host (Nick do Roblox)')
+        .setLabel('Host (Nick do Roblox)')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Seu nick no Roblox')
         .setRequired(true)
@@ -1238,7 +1238,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const linkInput = new TextInputBuilder()
         .setCustomId('scrim_link')
-        .setLabel('🔗 Link da Scrim')
+        .setLabel('Link da Scrim')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Link do servidor Roblox')
         .setRequired(true)
