@@ -96,7 +96,13 @@ let pingIntervalTimer = null;
 // Canal fixo para anúncios de scrim
 const SCRIM_CHANNEL = '1491439536545202216';
 // Cargo necessário para usar o comando /scrim
-const SCRIM_HOSTER_ROLE = '1491442295898243072';
+const SCRIM_HOSTER_ROLES = [
+    '1491442295898243072',
+    '1492271517508178081',
+    '1492271438068191262',
+    '1492271212078829698',
+    '1492271160333959278'
+];
 // Cargo mencionado quando ping_scrim = true
 const SCRIM_PING_ROLE = '1492348332700471458';
 
