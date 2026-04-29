@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 require('dotenv').config();
 
 const client = new Client({
@@ -90,15 +90,30 @@ let reactionMessageId = null;
 let pingIntervalTimer = null;
 
 // ═══════════════════════════════════════════════════
+// 🎮 SISTEMA DE SCRIM
+// ═══════════════════════════════════════════════════
+
+// Canal fixo para anúncios de scrim
+const SCRIM_CHANNEL = '1491439536545202216';
+// Cargo necessário para usar o comando /scrim
+const SCRIM_HOSTER_ROLE = '1491442295898243072';
+// Cargo mencionado quando ping_scrim = true
+const SCRIM_PING_ROLE = '1492348332700471458';
+
+// Armazena os dados de cada mensagem de scrim: messageId -> { link, requisitos, host, formato, channelId }
+const scrimData = new Map();
+// Evita envio duplicado do link
+const scrimLinkSent = new Set();
+
+// ═══════════════════════════════════════════════════
 // 🪟 SISTEMA DE JANELA DE TRANSFERÊNCIAS
 // ═══════════════════════════════════════════════════
 
 const TRANSFER_WINDOW_FILE = './transfer_window.json';
 
-// Estado padrão: clubs fechado, internacional aberto
 let transferWindow = {
-  clubs: false,        // false = fechado, true = aberto
-  internacional: true  // false = fechado, true = aberto
+  clubs: false,
+  internacional: true
 };
 
 function saveTransferWindow() {
@@ -496,6 +511,7 @@ function buildHelpEmbed() {
       { name: '🔓 /release', value: 'Se liberar de um time\n`Uso: /release`', inline: false },
       { name: '🤝 /friendly', value: 'Criar pedido de amistoso\n`Uso: /friendly sobre`', inline: false },
       { name: '🔍 /scouting', value: 'Criar scouting de clube\n`Uso: /scouting time posicao sobre`', inline: false },
+      { name: '🎮 /scrim', value: 'Criar anúncio de scrim\n`Uso: /scrim`', inline: false },
     )
     .setFooter({ text: 'The Classic Soccer Federation • Sistema Oficial' })
     .setTimestamp();
@@ -682,6 +698,10 @@ async function scheduleContractExpiration(contractId, contractData) {
   expirationTimers.set(contractId, timer);
 }
 
+// ═══════════════════════════════════════════════════
+// 🏗️ DEFINIÇÃO DOS SLASH COMMANDS
+// ═══════════════════════════════════════════════════
+
 const commands = [
   new SlashCommandBuilder()
     .setName('contract')
@@ -724,6 +744,17 @@ const commands = [
     .setDescription('Anunciar um pedido de friendly')
     .addStringOption(opt => opt.setName('sobre').setDescription('Detalhes do friendly (horário, formato, etc)').setRequired(true)),
 
+  // ─── NOVO /scrim COM MODAL ────────────────────────
+  new SlashCommandBuilder()
+    .setName('scrim')
+    .setDescription('Anuncia um scrim (Apenas Scrim Hosters)')
+    .addBooleanOption(opt =>
+      opt.setName('ping_scrim')
+        .setDescription('Deseja mencionar o cargo @Scrim Ping?')
+        .setRequired(true)
+    ),
+  // ────────────────────────────────────────────────────
+
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Ver todos os comandos disponíveis'),
@@ -733,12 +764,10 @@ const commands = [
     .setDescription('(Admin) Envia a mensagem de cargos por reação')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // ─── NOVO COMANDO ───────────────────────────────────
   new SlashCommandBuilder()
     .setName('janela')
     .setDescription('(Admin) Abre ou fecha a janela de transferências')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  // ────────────────────────────────────────────────────
 
   new SlashCommandBuilder()
     .setName('announce')
@@ -759,7 +788,7 @@ client.once('ready', async () => {
   console.log(`✅ Bot online como: ${client.user.tag}`);
 
   loadContracts();
-  loadTransferWindow(); // ← carrega janelas ao iniciar
+  loadTransferWindow();
   reactionMessageId = loadReactionMessageId();
 
   const guild = client.guilds.cache.first();
@@ -820,13 +849,74 @@ client.on('channelCreate', async (channel) => {
   }
 });
 
-client.on('messageReactionAdd', async (reaction, user) => {
-  if (user.bot) return;
-  if (reaction.message.id !== reactionMessageId) return;
+// ═══════════════════════════════════════════════════
+// 🎯 EVENTO DE REAÇÕES (REACTION ROLES + SCRIM)
+// ═══════════════════════════════════════════════════
 
+client.on('messageReactionAdd', async (reaction, user) => {
+  // Ignorar reações de bots
+  if (user.bot) return;
+
+  // Tratar reações parciais (mensagens não cacheadas)
   if (reaction.partial) {
-    try { await reaction.fetch(); } catch { return; }
+    try {
+      await reaction.fetch();
+    } catch (error) {
+      console.error('Erro ao buscar reação parcial:', error);
+      return;
+    }
   }
+
+  const messageId = reaction.message.id;
+
+  // ─── SISTEMA DE SCRIM ────────────────────────────────
+  // Verificar se a mensagem é um anúncio de scrim
+  if (scrimData.has(messageId) && reaction.emoji.name === '✅') {
+    const scrim = scrimData.get(messageId);
+
+    // Evitar múltiplos envios do link
+    if (scrimLinkSent.has(messageId)) return;
+
+    try {
+      // Buscar a mensagem atualizada para obter a contagem real de reações
+      const fetchedMessage = await reaction.message.fetch();
+      const reactionEmoji = fetchedMessage.reactions.cache.get('✅');
+
+      if (reactionEmoji) {
+        // Contar apenas usuários não-bots
+        const users = await reactionEmoji.users.fetch();
+        const userCount = users.filter(u => !u.bot).size;
+
+        // Se a quantidade de reações atingiu os requisitos, envia o link
+        if (userCount >= scrim.requisitos) {
+          scrimLinkSent.add(messageId); // Marcar como enviado para evitar duplicação
+
+          const linkEmbed = new EmbedBuilder()
+            .setColor(0x57f287)
+            .setTitle('🔗 Link da Scrim')
+            .setDescription(`A scrim atingiu **${scrim.requisitos}** reações! Aqui está o link de acesso:`)
+            .addFields(
+              { name: '🔗 Link', value: scrim.link, inline: false }
+            )
+            .setFooter({ text: 'The Classic Soccer Federation • Scrim' })
+            .setTimestamp();
+
+          await reaction.message.channel.send({
+            content: `✅ A scrim atingiu **${scrim.requisitos}** reações!`,
+            embeds: [linkEmbed]
+          });
+
+          console.log(`🔗 Link da scrim enviado para a mensagem ${messageId}`);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Erro ao processar reação de scrim:', err);
+    }
+    return; // Não continua para o reaction roles
+  }
+
+  // ─── SISTEMA DE REACTION ROLES ───────────────────────
+  if (reaction.message.id !== reactionMessageId) return;
 
   const emojiName = reaction.emoji.name;
   const roleConfig = REACTION_ROLES.find(r => r.emoji === emojiName);
@@ -1021,8 +1111,158 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// ═══════════════════════════════════════════════════
+// 🚀 HANDLER DE INTERAÇÕES (SLASH + BUTTONS + MODALS)
+// ═══════════════════════════════════════════════════
+
 client.on('interactionCreate', async (interaction) => {
+  // ─── MODAL SUBMIT: SCrim ────────────────────────────
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'scrim_modal') {
+      await interaction.deferReply({ ephemeral: true });
+
+      try {
+        const formato = interaction.fields.getTextInputValue('scrim_formato');
+        const requisitos = parseInt(interaction.fields.getTextInputValue('scrim_requisitos'));
+        const host = interaction.fields.getTextInputValue('scrim_host');
+        const link = interaction.fields.getTextInputValue('scrim_link');
+        const pingScrim = interaction.fields.getTextInputValue('scrim_ping') === 'true'; // valor passado como string
+
+        // Validar se requisitos é um número válido
+        if (isNaN(requisitos) || requisitos <= 0) {
+          return interaction.editReply({ content: '❌ A quantidade de requisitos deve ser um número válido maior que 0.' });
+        }
+
+        // Buscar o canal de scrim
+        const scrimChannel = await interaction.guild.channels.fetch(SCRIM_CHANNEL).catch(() => null);
+        if (!scrimChannel) {
+          return interaction.editReply({ content: '❌ Canal de scrim não encontrado. Contate um administrador.' });
+        }
+
+        // Construir o conteúdo (com ou sem ping)
+        const content = pingScrim ? `<@&${SCRIM_PING_ROLE}>` : '';
+
+        // Construir embed moderna (apenas formato, host e requisitos)
+        const scrimEmbed = new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle('🎮 Nova Scrim')
+          .addFields(
+            { name: '📋 Formato', value: formato, inline: false },
+            { name: '👤 Host', value: host, inline: true },
+            { name: '👥 Quantidade necessária', value: `${requisitos} jogadores`, inline: true }
+          )
+          .setFooter({ text: 'The Classic Soccer Federation • Reaja com ✅ para participar' })
+          .setTimestamp();
+
+        // Enviar a mensagem
+        const sentMessage = await scrimChannel.send({
+          content: content,
+          embeds: [scrimEmbed]
+        });
+
+        // Adicionar reação ✅ automaticamente
+        await sentMessage.react('✅');
+
+        // Armazenar dados da scrim no Map
+        scrimData.set(sentMessage.id, {
+          link: link,
+          requisitos: requisitos,
+          host: host,
+          formato: formato,
+          channelId: SCRIM_CHANNEL
+        });
+
+        console.log(`🎮 Scrim criada por ${interaction.user.tag} — Mensagem: ${sentMessage.id} | Requisitos: ${requisitos}`);
+
+        await interaction.editReply({ content: '✅ Scrim anunciada com sucesso no canal de scrims!' });
+
+      } catch (err) {
+        console.error('❌ Erro ao processar modal de scrim:', err);
+        await interaction.editReply({ content: '❌ Ocorreu um erro ao anunciar a scrim. Tente novamente.' });
+      }
+    }
+    return;
+  }
+
+  // ─── SLASH COMMANDS ──────────────────────────────────
   if (interaction.isChatInputCommand()) {
+
+    // ─── COMANDO /scrim ────────────────────────────
+    if (interaction.commandName === 'scrim') {
+      // Verificar se o usuário tem o cargo Scrim Hoster
+      if (!interaction.member.roles.cache.has(SCRIM_HOSTER_ROLE)) {
+        return interaction.reply({
+          content: '❌ | Você precisa ter o cargo Scrim Hoster.',
+          ephemeral: true
+        });
+      }
+
+      // Obter a opção ping_scrim
+      const pingScrim = interaction.options.getBoolean('ping_scrim') ?? false;
+
+      // Criar o modal
+      const modal = new ModalBuilder()
+        .setCustomId('scrim_modal')
+        .setTitle('🎮 Criar Scrim');
+
+      // Campos do modal
+      const formatoInput = new TextInputBuilder()
+        .setCustomId('scrim_formato')
+        .setLabel('📋 Formato da Scrim')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Ex: 5v5, 3v3, etc.')
+        .setRequired(true)
+        .setMaxLength(100);
+
+      const requisitosInput = new TextInputBuilder()
+        .setCustomId('scrim_requisitos')
+        .setLabel('👥 Quantidade de jogadores necessária')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Ex: 4')
+        .setRequired(true)
+        .setMaxLength(3);
+
+      const hostInput = new TextInputBuilder()
+        .setCustomId('scrim_host')
+        .setLabel('👤 Host (Nick do Roblox)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Seu nick no Roblox')
+        .setRequired(true)
+        .setMaxLength(100);
+
+      const linkInput = new TextInputBuilder()
+        .setCustomId('scrim_link')
+        .setLabel('🔗 Link da Scrim')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Link do servidor Roblox')
+        .setRequired(true)
+        .setMaxLength(200);
+
+      // Campo oculto para passar o valor de ping_scrim
+      const pingInput = new TextInputBuilder()
+        .setCustomId('scrim_ping')
+        .setLabel('Ping Scrim (não altere)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('true ou false')
+        .setValue(pingScrim ? 'true' : 'false')
+        .setRequired(true)
+        .setMaxLength(5);
+
+      // Adicionar campos ao modal (máximo 5 por linha)
+      const row1 = new ActionRowBuilder().addComponents(formatoInput);
+      const row2 = new ActionRowBuilder().addComponents(requisitosInput);
+      const row3 = new ActionRowBuilder().addComponents(hostInput);
+      const row4 = new ActionRowBuilder().addComponents(linkInput);
+      const row5 = new ActionRowBuilder().addComponents(pingInput);
+
+      modal.addComponents(row1, row2, row3, row4, row5);
+
+      // Mostrar o modal
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ─── OUTROS COMANDOS ────────────────────────────
 
     if (interaction.commandName === 'help') {
       return interaction.reply({ embeds: [buildHelpEmbed()], ephemeral: true });
@@ -1045,29 +1285,26 @@ client.on('interactionCreate', async (interaction) => {
     // ═══════════════════════════════════════════════════
 
    if (interaction.commandName === 'janela') {
-  // Validação dupla de segurança
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0xed4245)
-          .setTitle('🔒 Acesso Negado')
-          .setDescription('Apenas **administradores** podem usar este comando.')
-          .setFooter({ text: 'The Classic Soccer Federation' })
-          .setTimestamp()
-      ],
-      ephemeral: true
-    });
-  }
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xed4245)
+              .setTitle('🔒 Acesso Negado')
+              .setDescription('Apenas **administradores** podem usar este comando.')
+              .setFooter({ text: 'The Classic Soccer Federation' })
+              .setTimestamp()
+          ],
+          ephemeral: true
+        });
+      }
 
-  return interaction.reply({
-    embeds: [buildTransferWindowEmbed()],
-    components: [buildTransferWindowSelectMenu()],
-    ephemeral: true
-  });
-}
-
-    // ═══════════════════════════════════════════════════
+      return interaction.reply({
+        embeds: [buildTransferWindowEmbed()],
+        components: [buildTransferWindowSelectMenu()],
+        ephemeral: true
+      });
+    }
 
     if (interaction.commandName === 'contract') {
       if (!isContractChannelAllowed(interaction.channelId)) {
@@ -1103,8 +1340,6 @@ client.on('interactionCreate', async (interaction) => {
       const isTeamContract = ALLOWED_TEAM_ROLES.includes(teamRole.id);
       const isInternationalContract = INTERNATIONAL_ROLES.includes(teamRole.id);
 
-      // ─── VERIFICAÇÃO DE JANELA ──────────────────────────
-
       if (isTeamContract) {
         if (!transferWindow.clubs) {
           return interaction.reply({
@@ -1136,7 +1371,6 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
 
-        // Verificação de jogador já em seleção (mantida do código original)
         const signeeHasIntlRole = signeeGuildMember &&
           INTERNATIONAL_ROLES.some(id => signeeGuildMember.roles.cache.has(id));
 
@@ -1162,8 +1396,6 @@ client.on('interactionCreate', async (interaction) => {
           });
         }
       }
-
-      // ────────────────────────────────────────────────────
 
       if (!isRoleAllowed(teamRole)) {
         return interaction.reply({
@@ -1610,6 +1842,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
+  // ─── BOTÕES ───────────────────────────────────────────
   if (interaction.isButton()) {
     const [action, contractId] = interaction.customId.split('_').reduce((acc, part, i) => {
       if (i === 0) acc[0] = part;
@@ -1695,16 +1928,12 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
+  // ─── SELECT MENUS ─────────────────────────────────────
   if (interaction.isStringSelectMenu()) {
 
-    // ═══════════════════════════════════════════════════
     // 🪟 SELECT MENU DA JANELA DE TRANSFERÊNCIAS
-    // ═══════════════════════════════════════════════════
-
     if (interaction.customId === 'transfer_window_select') {
-      const selected = interaction.values[0]; // 'clubs' ou 'internacional'
-
-      // Faz o toggle
+      const selected = interaction.values[0];
       transferWindow[selected] = !transferWindow[selected];
       saveTransferWindow();
 
@@ -1713,13 +1942,11 @@ client.on('interactionCreate', async (interaction) => {
 
       console.log(`🪟 Janela "${selected}" alterada para: ${transferWindow[selected] ? 'ABERTA' : 'FECHADA'} por ${interaction.user.tag}`);
 
-      // Atualiza o embed com o novo estado
       await interaction.update({
         embeds: [buildTransferWindowEmbed()],
         components: [buildTransferWindowSelectMenu()]
       });
 
-      // Envia confirmação separada (ephemeral)
       await interaction.followUp({
         embeds: [
           new EmbedBuilder()
@@ -1735,8 +1962,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ═══════════════════════════════════════════════════
-
+    // 🔓 SELECT MENU DE RELEASE
     if (interaction.customId === 'release_select') {
       const selectedRoleId = interaction.values[0];
       const selectedRole = interaction.guild.roles.cache.get(selectedRoleId);
