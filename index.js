@@ -374,18 +374,6 @@ async function setupReactionRolesMessage(guild) {
     return;
   }
 
-  if (reactionMessageId) {
-    try {
-      const existing = await channel.messages.fetch(reactionMessageId);
-      if (existing) {
-        console.log('✅ Mensagem de reaction roles já existe, reutilizando.');
-        return;
-      }
-    } catch {
-      console.log('⚠️ Mensagem de reaction roles não encontrada, criando nova...');
-    }
-  }
-
   const msg = await channel.send({
     embeds: [buildReactionRolesEmbed()],
   });
@@ -763,11 +751,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Ver todos os comandos disponíveis'),
-
-  new SlashCommandBuilder()
-    .setName('setup_reaction_roles')
-    .setDescription('(Admin) Envia a mensagem de cargos por reação')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName('janela')
@@ -1275,18 +1258,6 @@ if (!hasPermission) {
 
     if (interaction.commandName === 'help') {
       return interaction.reply({ embeds: [buildHelpEmbed()], flags: MessageFlags.Ephemeral });
-    }
-
-    if (interaction.commandName === 'setup_reaction_roles') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      try {
-        await setupReactionRolesMessage(interaction.guild);
-        await interaction.editReply({ content: '✅ Mensagem de reaction roles enviada com sucesso!' });
-      } catch (err) {
-        console.error('Erro no setup_reaction_roles:', err);
-        await interaction.editReply({ content: '❌ Erro ao enviar mensagem de reaction roles. Verifique o canal configurado.' });
-      }
-      return;
     }
 
     // ═══════════════════════════════════════════════════
