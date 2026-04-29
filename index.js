@@ -96,7 +96,7 @@ let pingIntervalTimer = null;
 // Canal fixo para anúncios de scrim
 const SCRIM_CHANNEL = '1491439536545202216';
 // Cargo necessário para usar o comando /scrim
-const SCRIM_HOSTER_ROLE = [
+const SCRIM_HOSTER_ROLES = [
     '1491442295898243072',
     '1492271517508178081',
     '1492271438068191262',
@@ -1196,12 +1196,16 @@ client.on('interactionCreate', async (interaction) => {
     // ─── COMANDO /scrim ────────────────────────────
     if (interaction.commandName === 'scrim') {
       // Verificar se o usuário tem o cargo Scrim Hoster
-      if (!interaction.member.roles.cache.has(SCRIM_HOSTER_ROLE)) {
-        return interaction.reply({
-          content: '❌ | Você precisa ter o cargo Scrim Hoster.',
-          ephemeral: true
-        });
-      }
+      const hasPermission = SCRIM_HOSTER_ROLES.some(roleId =>
+    interaction.member.roles.cache.has(roleId)
+);
+
+if (!hasPermission) {
+    return interaction.reply({
+        content: '❌ | Você precisa ter o cargo Scrim Hoster.',
+        ephemeral: true
+    });
+}
 
       // Obter a opção ping_scrim
       const pingScrim = interaction.options.getBoolean('ping_scrim') ?? false;
