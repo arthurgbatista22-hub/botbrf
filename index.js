@@ -1,6 +1,11 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, REST, Routes, PermissionFlagsBits, ChannelType, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } = require('discord.js');
 require('dotenv').config();
+
+// Evita que erros não tratados derrubem o bot
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 const client = new Client({
   intents: [
@@ -1119,7 +1124,7 @@ client.on('interactionCreate', async (interaction) => {
   // ─── MODAL SUBMIT: SCrim ────────────────────────────
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'scrim_modal') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       try {
         const formato = interaction.fields.getTextInputValue('scrim_formato');
@@ -1197,7 +1202,7 @@ client.on('interactionCreate', async (interaction) => {
 if (!hasPermission) {
     return interaction.reply({
         content: '❌ | Você precisa ter o cargo Scrim Hoster.',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1269,11 +1274,11 @@ if (!hasPermission) {
     // ─── OUTROS COMANDOS ────────────────────────────
 
     if (interaction.commandName === 'help') {
-      return interaction.reply({ embeds: [buildHelpEmbed()], ephemeral: true });
+      return interaction.reply({ embeds: [buildHelpEmbed()], flags: MessageFlags.Ephemeral });
     }
 
     if (interaction.commandName === 'setup_reaction_roles') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       try {
         await setupReactionRolesMessage(interaction.guild);
         await interaction.editReply({ content: '✅ Mensagem de reaction roles enviada com sucesso!' });
@@ -1299,29 +1304,29 @@ if (!hasPermission) {
               .setFooter({ text: 'The Classic Soccer Federation' })
               .setTimestamp()
           ],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
 
       return interaction.reply({
         embeds: [buildTransferWindowEmbed()],
         components: [buildTransferWindowSelectMenu()],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
 
     if (interaction.commandName === 'contract') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       if (!isContractChannelAllowed(interaction.channelId)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       if (!hasCommandPermission(interaction.member)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem criar contratos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem criar contratos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1333,9 +1338,8 @@ if (!hasPermission) {
 
       const existingContract = [...activeContracts.values()].find(c => c.signee.id === signee.id);
       if (existingContract) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Contrato Já Existente').setDescription(`${signee} já possui um contrato ativo com **${existingContract.teamName}**.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Contrato Já Existente').setDescription(`${signee} já possui um contrato ativo com **${existingContract.teamName}**.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1346,7 +1350,7 @@ if (!hasPermission) {
 
       if (isTeamContract) {
         if (!transferWindow.clubs) {
-          return interaction.reply({
+          return interaction.editReply({
             embeds: [
               new EmbedBuilder()
                 .setColor(0xed4245)
@@ -1354,15 +1358,14 @@ if (!hasPermission) {
                 .setDescription('A janela de transferências para **clubes** está fechada no momento.\nApenas **seleções internacionais** podem contratar jogadores.')
                 .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para clubes' })
                 .setTimestamp()
-            ],
-            ephemeral: true
+            ]
           });
         }
       }
 
       if (isInternationalContract) {
         if (!transferWindow.internacional) {
-          return interaction.reply({
+          return interaction.editReply({
             embeds: [
               new EmbedBuilder()
                 .setColor(0xed4245)
@@ -1370,8 +1373,7 @@ if (!hasPermission) {
                 .setDescription('A janela de transferências para **seleções internacionais** está fechada no momento.')
                 .setFooter({ text: 'The Classic Soccer Federation • Janela de transferências fechada para seleções' })
                 .setTimestamp()
-            ],
-            ephemeral: true
+            ]
           });
         }
 
@@ -1383,7 +1385,7 @@ if (!hasPermission) {
             .map(id => interaction.guild.roles.cache.get(id))
             .find(r => r && signeeGuildMember.roles.cache.has(r.id));
 
-          return interaction.reply({
+          return interaction.editReply({
             embeds: [
               new EmbedBuilder()
                 .setColor(0xed4245)
@@ -1395,16 +1397,14 @@ if (!hasPermission) {
                 )
                 .setFooter({ text: 'The Classic Soccer Federation • O jogador deve usar /release primeiro' })
                 .setTimestamp()
-            ],
-            ephemeral: true
+            ]
           });
         }
       }
 
       if (!isRoleAllowed(teamRole)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Cargo Não Permitido').setDescription(`O cargo **${teamRole.name}** não está autorizado para contratos.\n\nApenas cargos de times podem ser usados.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Cargo Não Permitido').setDescription(`O cargo **${teamRole.name}** não está autorizado para contratos.\n\nApenas cargos de times podem ser usados.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1413,9 +1413,8 @@ if (!hasPermission) {
         teamRole.permissions.has(PermissionFlagsBits.ManageGuild) ||
         teamRole.permissions.has(PermissionFlagsBits.ManageRoles)
       ) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Cargo Administrativo Bloqueado').setDescription(`Por segurança, cargos com permissões administrativas não podem ser usados em contratos.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Cargo Administrativo Bloqueado').setDescription(`Por segurança, cargos com permissões administrativas não podem ser usados em contratos.`).setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1470,7 +1469,7 @@ if (!hasPermission) {
         console.error('❌ Erro ao enviar contract no canal de anúncios:', err);
       }
 
-      await interaction.reply({ content: '✅ Contrato enviado para o canal de contratos!', ephemeral: true });
+      await interaction.editReply({ content: '✅ Contrato enviado para o canal de contratos!' });
 
       try {
         const dmEmbed = new EmbedBuilder()
@@ -1495,6 +1494,8 @@ if (!hasPermission) {
     }
 
     else if (interaction.commandName === 'announce') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       const ALLOWED_ANNOUNCE_ROLES = [
         '1491438719201181717',
         '1491439004149747842',
@@ -1512,7 +1513,7 @@ if (!hasPermission) {
       const hasAnnouncePermission = ALLOWED_ANNOUNCE_ROLES.some(id => interaction.member.roles.cache.has(id));
 
       if (!hasAnnouncePermission) {
-        return interaction.reply({ content: '❌ Você não tem permissão para usar este comando.', ephemeral: true });
+        return interaction.editReply({ content: '❌ Você não tem permissão para usar este comando.' });
       }
 
       const canal = interaction.options.getChannel('canal');
@@ -1528,24 +1529,25 @@ if (!hasPermission) {
 
       try {
         await canal.send({ embeds: [announceEmbed] });
-        await interaction.reply({ content: `✅ Anúncio enviado com sucesso em ${canal}!`, ephemeral: true });
+        await interaction.editReply({ content: `✅ Anúncio enviado com sucesso em ${canal}!` });
         console.log(`📢 Anúncio enviado por ${interaction.user.tag} no canal #${canal.name}`);
       } catch (err) {
         console.error('❌ Erro ao enviar anúncio:', err);
-        await interaction.reply({ content: '❌ Não foi possível enviar o anúncio. Verifique se o bot tem permissão nesse canal.', ephemeral: true });
+        await interaction.editReply({ content: '❌ Não foi possível enviar o anúncio. Verifique se o bot tem permissão nesse canal.' });
       }
     }
 
     else if (interaction.commandName === 'contratos_ativos') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!hasCommandPermission(interaction.member)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       if (activeContracts.size === 0) {
-        return interaction.reply({ content: '📭 Nenhum contrato ativo no momento.', ephemeral: true });
+        return interaction.editReply({ content: '📭 Nenhum contrato ativo no momento.' });
       }
 
       const embed = new EmbedBuilder()
@@ -1562,20 +1564,21 @@ if (!hasPermission) {
         });
       }
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.editReply({ embeds: [embed] });
     }
 
     else if (interaction.commandName === 'meu_contrato') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!hasCommandPermission(interaction.member)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       const userContract = [...activeContracts.values()].find(c => c.signee.id === interaction.user.id);
       if (!userContract) {
-        return interaction.reply({ content: '📭 Você não possui contrato ativo.', ephemeral: true });
+        return interaction.editReply({ content: '📭 Você não possui contrato ativo.' });
       }
 
       const embed = new EmbedBuilder()
@@ -1590,22 +1593,22 @@ if (!hasPermission) {
         .setFooter({ text: 'The Classic Soccer Federation' })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.editReply({ embeds: [embed] });
     }
 
     else if (interaction.commandName === 'fa') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!isFaChannelAllowed(interaction.channelId)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       const hasTeamRole = ALLOWED_TEAM_ROLES.some(id => interaction.member.roles.cache.has(id));
       if (hasTeamRole) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `❌ Você já é de um time! Se quiser sair, use **/release** no canal <#1492354496259428392>.`,
-          ephemeral: true
         });
       }
 
@@ -1633,7 +1636,7 @@ if (!hasPermission) {
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      await interaction.reply({ content: '✅ Seu anúncio de Free Agent foi publicado!', ephemeral: true });
+      await interaction.editReply({ content: '✅ Seu anúncio de Free Agent foi publicado!' });
 
       try {
         await sendToChannel(interaction.guild, FA_ANNOUNCEMENT_CHANNEL, { embeds: [faEmbed] }, `FA — ${interaction.user.username}`);
@@ -1643,17 +1646,17 @@ if (!hasPermission) {
     }
 
     else if (interaction.commandName === 'scouting') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!isScoutingChannelAllowed(interaction.channelId)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       if (!hasCommandPermission(interaction.member)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem fazer scouting.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem fazer scouting.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1676,7 +1679,7 @@ if (!hasPermission) {
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      await interaction.reply({ content: '✅ Seu anúncio de scouting foi publicado!', ephemeral: true });
+      await interaction.editReply({ content: '✅ Seu anúncio de scouting foi publicado!' });
 
       try {
         await sendToChannel(interaction.guild, SCOUTING_ANNOUNCEMENT_CHANNEL, { embeds: [scoutingEmbed] }, `Scouting — ${scout.username}`);
@@ -1686,17 +1689,17 @@ if (!hasPermission) {
     }
 
     else if (interaction.commandName === 'friendly') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!ALLOWED_FRIENDLY_CHANNELS.includes(interaction.channelId)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
       if (!hasCommandPermission(interaction.member)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem anunciar friendlies.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('🔒 Sem Permissão').setDescription('Você não tem permissão para usar este comando.\n\nApenas membros autorizados podem anunciar friendlies.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1719,7 +1722,7 @@ if (!hasPermission) {
         .setFooter({ text: `The Classic Soccer Federation • ${new Date().toLocaleDateString('pt-BR')}` })
         .setTimestamp();
 
-      await interaction.reply({ content: '✅ Seu pedido de friendly foi publicado!', ephemeral: true });
+      await interaction.editReply({ content: '✅ Seu pedido de friendly foi publicado!' });
 
       try {
         await sendToChannel(interaction.guild, FRIENDLY_ANNOUNCEMENT_CHANNEL, { embeds: [friendlyEmbed] }, `Friendly — ${interaction.user.username}`);
@@ -1729,10 +1732,11 @@ if (!hasPermission) {
     }
 
     else if (interaction.commandName === 'release') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      
       if (!ALLOWED_RELEASE_CHANNELS.includes(interaction.channelId)) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Canal Não Permitido').setDescription('Este comando só pode ser utilizado em canais específicos.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1759,9 +1763,8 @@ if (!hasPermission) {
       const allOwnedRoles = [...teamRoles, ...internationalRoles];
 
       if (allOwnedRoles.length === 0) {
-        return interaction.reply({
-          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time/Seleção').setDescription('Você não possui nenhum cargo de time ou seleção para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()],
-          ephemeral: true
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0xed4245).setTitle('❌ Sem Time/Seleção').setDescription('Você não possui nenhum cargo de time ou seleção para se liberar.').setFooter({ text: 'The Classic Soccer Federation' }).setTimestamp()]
         });
       }
 
@@ -1811,9 +1814,9 @@ if (!hasPermission) {
         const singleRole = allOwnedRoles[0];
         try {
           const embed = await releaseFromRole(singleRole.id, singleRole.name);
-          await interaction.reply({ embeds: [embed] });
+          await interaction.editReply({ embeds: [embed] });
         } catch {
-          await interaction.reply({ content: '❌ Ocorreu um erro ao processar sua liberação. Verifique se o bot tem permissão para gerenciar cargos.', ephemeral: true });
+          await interaction.editReply({ content: '❌ Ocorreu um erro ao processar sua liberação. Verifique se o bot tem permissão para gerenciar cargos.' });
         }
         return;
       }
@@ -1838,10 +1841,9 @@ if (!hasPermission) {
         .setFooter({ text: 'The Classic Soccer Federation' })
         .setTimestamp();
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [chooseEmbed],
         components: [row],
-        ephemeral: true
       });
     }
   }
@@ -1856,11 +1858,11 @@ if (!hasPermission) {
 
     const contractData = pendingContracts.get(contractId);
     if (!contractData) {
-      return interaction.reply({ content: '❌ Contrato não encontrado ou já processado.', ephemeral: true });
+      return interaction.reply({ content: '❌ Contrato não encontrado ou já processado.', flags: MessageFlags.Ephemeral });
     }
 
     if (interaction.user.id !== contractData.signee.id) {
-      return interaction.reply({ content: '❌ Apenas o jogador indicado pode aceitar ou rejeitar este contrato.', ephemeral: true });
+      return interaction.reply({ content: '❌ Apenas o jogador indicado pode aceitar ou rejeitar este contrato.', flags: MessageFlags.Ephemeral });
     }
 
     if (action === 'accept') {
@@ -1960,7 +1962,7 @@ if (!hasPermission) {
             .setFooter({ text: `The Classic Soccer Federation • Alterado por ${interaction.user.username}` })
             .setTimestamp()
         ],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
 
       return;
