@@ -1153,9 +1153,9 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x5865f2)
           .setTitle('🎮 Nova Scrim')
           .addFields(
-            { name: '📋 Formato', value: formato, inline: false },
-            { name: '👤 Host', value: host, inline: true },
-            { name: '👥 Quantidade necessária', value: `${requisitos} jogadores`, inline: true }
+            { name: 'Formato', value: formato, inline: false },
+            { name: 'Host', value: host, inline: true },
+            { name: 'Quantidade necessária', value: `${requisitos} jogadores`, inline: true }
           )
           .setFooter({ text: 'The Classic Soccer Federation • Reaja com ✅ para participar' })
           .setTimestamp();
