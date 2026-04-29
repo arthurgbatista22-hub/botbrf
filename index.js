@@ -12,6 +12,8 @@ const client = new Client({
   ]
 });
 
+const REACTION_MESSAGE_ID = '1499055556067852418';
+
 const ALLOWED_COMMAND_ROLES = [
   '1491439508309278831',
   '1491448375881498665'
@@ -347,13 +349,7 @@ function saveReactionMessageId(id) {
 }
 
 function loadReactionMessageId() {
-  if (!fs.existsSync(REACTION_MSG_FILE)) return null;
-  try {
-    const data = JSON.parse(fs.readFileSync(REACTION_MSG_FILE, 'utf8'));
-    return data.messageId || null;
-  } catch {
-    return null;
-  }
+  return REACTION_MESSAGE_ID;
 }
 
 function buildReactionRolesEmbed() {
@@ -393,8 +389,6 @@ async function setupReactionRolesMessage(guild) {
     await msg.react(r.emoji);
   }
 
-  reactionMessageId = msg.id;
-  saveReactionMessageId(msg.id);
   console.log(`✅ Mensagem de reaction roles criada: ${msg.id}`);
 }
 
