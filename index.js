@@ -126,7 +126,8 @@ const TRANSFER_WINDOW_FILE = './transfer_window.json';
 
 let transferWindow = {
   clubs: false,
-  internacional: true
+  internacional: true,
+  freeAgent: true  // ← ADICIONAR
 };
 
 function saveTransferWindow() {
@@ -142,7 +143,8 @@ function loadTransferWindow() {
     const data = JSON.parse(fs.readFileSync(TRANSFER_WINDOW_FILE, 'utf8'));
     transferWindow.clubs = data.clubs ?? false;
     transferWindow.internacional = data.internacional ?? true;
-    console.log(`📂 Janelas carregadas — Clubs: ${transferWindow.clubs ? '🟢 Aberta' : '🔴 Fechada'} | Internacional: ${transferWindow.internacional ? '🟢 Aberta' : '🔴 Fechada'}`);
+    transferWindow.freeAgent = data.freeAgent ?? true;  // ← ADICIONAR
+    console.log(`📂 Janelas carregadas — Clubs: ${transferWindow.clubs ? '🟢 Aberta' : '🔴 Fechada'} | Internacional: ${transferWindow.internacional ? '🟢 Aberta' : '🔴 Fechada'} | Free Agent: ${transferWindow.freeAgent ? '🟢 Aberta' : '🔴 Fechada'}`);
   } catch (err) {
     console.error('Erro ao carregar transfer window:', err);
     saveTransferWindow();
@@ -163,6 +165,11 @@ function buildTransferWindowEmbed() {
       {
         name: '🌍 Internacional',
         value: transferWindow.internacional ? '🟢 **Aberta** — Seleções podem contratar jogadores' : '🔴 **Fechada** — Seleções não podem contratar jogadores',
+        inline: false
+      },
+      {
+        name: '🟡 Free Agent',  // ← CAMPO NOVO
+        value: transferWindow.freeAgent ? '🟢 **Aberta** — Jogadores podem se anunciar como FA' : '🔴 **Fechada** — Jogadores não podem se anunciar como FA',
         inline: false
       }
     )
@@ -187,6 +194,12 @@ function buildTransferWindowSelectMenu() {
           value: 'internacional',
           description: transferWindow.internacional ? 'Fechar janela de seleções' : 'Abrir janela de seleções',
           emoji: '🌍'
+        },
+        {
+          label: `Free Agent — ${transferWindow.freeAgent ? 'Fechar' : 'Abrir'}`,  // ← OPÇÃO NOVA
+          value: 'freeAgent',
+          description: transferWindow.freeAgent ? 'Fechar anúncios de Free Agent' : 'Abrir anúncios de Free Agent',
+          emoji: '🟡'
         }
       ])
   );
@@ -1569,6 +1582,19 @@ if (!hasPermission) {
 
     else if (interaction.commandName === 'fa') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      if (!transferWindow.freeAgent) {
+  return interaction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xed4245)
+        .setTitle('🚫 Janela de Free Agent Fechada')
+        .setDescription('Os anúncios de **Free Agent** estão desativados no momento.\nAguarde a abertura da janela para se anunciar.')
+        .setFooter({ text: 'The Classic Soccer Federation • Janela de FA fechada' })
+        .setTimestamp()
+    ]
+  });
+}
       
       if (!isFaChannelAllowed(interaction.channelId)) {
         return interaction.editReply({
@@ -1914,7 +1940,7 @@ if (!hasPermission) {
       transferWindow[selected] = !transferWindow[selected];
       saveTransferWindow();
 
-      const nomeLegivel = selected === 'clubs' ? '🏟️ Clubs' : '🌍 Internacional';
+      const nomeLegivel = selected === 'clubs' ? '🏟️ Clubs' : selected === 'internacional' ? '🌍 Internacional' : '🟡 Free Agent';
       const novoEstado = transferWindow[selected] ? '🟢 **Aberta**' : '🔴 **Fechada**';
 
       console.log(`🪟 Janela "${selected}" alterada para: ${transferWindow[selected] ? 'ABERTA' : 'FECHADA'} por ${interaction.user.tag}`);
